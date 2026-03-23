@@ -14,5 +14,5 @@ To enable autovectorization, the RISC-V GNU Compiler Toolchain (GCC v15) is requ
 ```
 
 ### VPU Overview
-<img src="block_diagrams/vermu_top.png" width="300">
+<img src="block_diagrams/vermu_top.png" width="500">
 
