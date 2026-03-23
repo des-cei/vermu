@@ -1,0 +1,30 @@
+CAPI=2:
+
+name: "ceiupm::vpu_upm"
+description: "First VPU for load store"
+
+filesets:
+  files_rtl:
+    files:
+      - rtl/include/cvxif_types_pkg.sv
+      - rtl/include/obi_pkg.sv
+      - rtl/include/rvv_instr_pkg.sv
+      - rtl/include/vector_ops_pkg.sv
+      - rtl/include/vpu_pkg.sv
+      - rtl/instr_decoder.sv
+      - rtl/load_store_unit_mis.sv
+      - rtl/obi_lsu_top.sv
+      - rtl/simd_controller.sv
+      - rtl/VAU_lanes.sv
+      - rtl/VAU.sv
+      - rtl/vpu_top.sv
+      - rtl/vregfile.sv
+      - rtl/include/utils_macros.svh: {is_include_file: true}
+    file_type: systemVerilogSource
+    include_dirs:
+      - rtl/include
+
+targets:
+  default:
+    filesets:
+      - files_rtl

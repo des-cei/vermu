@@ -12,3 +12,7 @@ To enable autovectorization, the RISC-V GNU Compiler Toolchain (GCC v15) is requ
 --enable-multilib \
 --with-cmodel=medlow
 ```
+
+### VPU Overview
+<img src="block_diagrams/vermu_top.png" width="300">
+
