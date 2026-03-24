@@ -1,0 +1,4 @@
+build/
+sw/build/
+tb/*.do
+transcript

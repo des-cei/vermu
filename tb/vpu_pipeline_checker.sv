@@ -14,26 +14,34 @@ module vpu_pipeline_checker
     parameter  type         x_register_t     = logic,
     parameter  type         x_commit_t       = logic,
     parameter  type         x_result_t       = logic,
-    parameter  type         cvxif_req_t      = logic,
-    parameter  type         cvxif_resp_t     = logic,
     localparam type         registers_t      = logic [NrRgprPorts-1:0][XLEN-1:0],
     parameter  int unsigned EXT_XBAR_NMASTER = 1
 ) (
-    input logic clk_i,
-    input logic rst_ni,
+    input logic          clk_i,
+    input logic          rst_ni,
 
-    // Snoop Interfaces
-    input cvxif_req_t  cvxif_req_i,
-    input cvxif_resp_t cvxif_resp_i,
+    // X-IF Interface
+    //input logic          x_issue_valid_i,
+    //input  logic          x_issue_ready_i,
+    input x_issue_req_t  x_issue_req_i,
+    //input  x_issue_resp_t x_issue_resp_i,
+    //output x_register_t   x_register_o,
+    //output logic          x_register_valid_o,
+    //input  logic          x_register_ready_i,
+    //output logic          x_commit_valid_o,
+    //output x_commit_t     x_commit_o,
+    //input  logic          x_result_valid_i,
+    //output logic          x_result_ready_o,
+    //input  x_result_t     x_result_i,
 
     // Debug hooks directly into the VPU
-    input op_e          vpu_dbg_operation_i,
-    input logic         vpu_dbg_is_narrowing_i,
-    input logic [127:0] vpu_dbg_rdata1_i,
-    input logic [127:0] vpu_dbg_rdata2_i,
-    input logic [127:0] vpu_dbg_vd_old_i,
-    input logic         vpu_dbg_simd_result_valid_i,
-    input logic [127:0] vpu_dbg_result_i
+    input op_e            vpu_dbg_operation_i,
+    input logic           vpu_dbg_is_narrowing_i,
+    input logic [127:0]   vpu_dbg_rdata1_i,
+    input logic [127:0]   vpu_dbg_rdata2_i,
+    input logic [127:0]   vpu_dbg_vd_old_i,
+    input logic           vpu_dbg_simd_result_valid_i,
+    input logic [127:0]   vpu_dbg_result_i
 );
 
   typedef struct {
@@ -50,7 +58,7 @@ module vpu_pipeline_checker
   always_ff @(negedge clk_i) begin
     if (vpu_dbg_simd_result_valid_i) begin
       // Grab the signals exactly as they appear on the wires right now
-      check_math(cvxif_req_i.issue_req.instr, vpu_dbg_operation_i, vpu_dbg_rdata1_i,
+      check_math(x_issue_req_i.instr, vpu_dbg_operation_i, vpu_dbg_rdata1_i,
                  vpu_dbg_rdata2_i, vpu_dbg_vd_old_i, vpu_dbg_result_i);
     end
   end

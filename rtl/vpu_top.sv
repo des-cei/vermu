@@ -26,17 +26,17 @@ module vpu_top
     input logic               clk_i,   
     input logic               rst_ni,
     // CVXIF Interface
-    input logic               x_issue_valid_i,
+    input  logic              x_issue_valid_i,
 		output logic              x_issue_ready_o,
-		input x_issue_req_t       x_issue_req_i,
+		input  x_issue_req_t      x_issue_req_i,
 		output x_issue_resp_t     x_issue_resp_o,
-		input x_register_t        x_register_i,
-    input logic               x_register_valid_i,
+		input  x_register_t       x_register_i,
+    input  logic              x_register_valid_i,
     output logic              x_register_ready_o,
-		input logic               x_commit_valid_i,
-		input x_commit_t          x_commit_i,
+		input  logic              x_commit_valid_i,
+		input  x_commit_t         x_commit_i,
 		output logic              x_result_valid_o,
-		input logic               x_result_ready_i,
+		input  logic              x_result_ready_i,
 		output x_result_t         x_result_o,
 
     input  obi_resp_t [EXT_XBAR_NMASTER-1:0] masters_resp_i,
@@ -229,6 +229,7 @@ module vpu_top
     x_result_valid_o  = result_valid; 
     x_result_o.hartid = issue_hartid;
     x_result_o.id     = issue_id;
+    x_result_o.we     = '0;
 
     if (vpu_req.mopcode == op_v) begin
       x_result_o.data = (vpu_req.funct3 == OPCFG_CSRRCI) ? csr_result : gpr_result; 
@@ -342,6 +343,8 @@ module vpu_top
                       wdata[i] = mask[i] ? rdata1[i] : vrf_rdata2[i];
                     end
                   end
+              end else begin
+                wdata = '0;
               end
             end
           endcase

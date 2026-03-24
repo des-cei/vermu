@@ -11,22 +11,32 @@ module vpu_stimulus_gen #(
     parameter  type         x_register_t     = logic,
     parameter  type         x_commit_t       = logic,
     parameter  type         x_result_t       = logic,
-    parameter  type         cvxif_req_t      = logic,
-    parameter  type         cvxif_resp_t     = logic,
     localparam type         registers_t      = logic [NrRgprPorts-1:0][XLEN-1:0],
     parameter  int unsigned EXT_XBAR_NMASTER = 1
 ) (
-    input logic clk_i,
-    input logic rst_ni,
+    input logic               clk_i,
+    input logic               rst_ni,
 
-    // CVXIF Master Interface
-    output cvxif_req_t  cvxif_req_o,
-    input  cvxif_resp_t cvxif_resp_i
+    // CVXIF Interface
+    output logic              x_issue_valid_o,
+    input  logic              x_issue_ready_i,
+    output x_issue_req_t      x_issue_req_o,
+    input  x_issue_resp_t     x_issue_resp_i,
+    output x_register_t       x_register_o,
+    output logic              x_register_valid_o,
+    input  logic              x_register_ready_i,
+    output logic              x_commit_valid_o,
+    output x_commit_t         x_commit_o,
+    input  logic              x_result_valid_i,
+    output logic              x_result_ready_o,
+    input  x_result_t         x_result_i
 );
 
   int file_handle;
   int scan_result;
+  int idle_after_eof_cycles;
   string stimulus_file;
+  logic eof_seen;
 
   logic [31:0] curr_instr, curr_rs1, curr_rs2;
   string curr_mnemonic;
@@ -49,7 +59,15 @@ module vpu_stimulus_gen #(
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       state <= INIT;
-      cvxif_req_o <= '0;
+      x_issue_valid_o    <= '0;
+      x_issue_req_o      <= '0;
+      x_register_o       <= '0;
+      x_register_valid_o <= '0;
+      x_commit_valid_o   <= '0;
+      x_commit_o         <= '0;
+      x_result_ready_o   <= 1'b1;
+      eof_seen           <= 1'b0;
+      idle_after_eof_cycles <= 0;
     end else begin
       state <= next_state;
 
@@ -59,20 +77,34 @@ module vpu_stimulus_gen #(
             scan_result = $fscanf(file_handle, "%h %h %h %s\n", curr_instr, curr_rs1, curr_rs2,
                                   curr_mnemonic);
             if (scan_result == 4) begin
-              cvxif_req_o.issue_valid <= 1'b1;
-              cvxif_req_o.issue_req.instr <= curr_instr;
-              cvxif_req_o.register.rs[0] <= curr_rs1;
-              cvxif_req_o.register.rs[1] <= curr_rs2;
+              x_issue_valid_o <= 1'b1;
+              x_register_valid_o <= 1'b1;
+              x_issue_req_o.instr <= curr_instr;
+              x_register_o.rs[0] <= curr_rs1;
+              x_register_o.rs[1] <= curr_rs2;
             end
+          end else begin
+            eof_seen <= 1'b1;
           end
         end
         SEND: begin
-          if (cvxif_resp_i.issue_ready) begin
-            cvxif_req_o.issue_valid <= 1'b0;
+          if (x_issue_ready_i) begin
+            x_issue_valid_o <= 1'b0;
+            x_register_valid_o <= 1'b0;
           end
         end
         default: ;  // Maintain state
       endcase
+
+      if (eof_seen && !x_issue_valid_o && !x_register_valid_o) begin
+        idle_after_eof_cycles <= idle_after_eof_cycles + 1;
+        if (idle_after_eof_cycles > 20) begin
+          $display("Stimulus completed, finishing simulation.");
+          $finish;
+        end
+      end else begin
+        idle_after_eof_cycles <= 0;
+      end
     end
   end
 
@@ -81,7 +113,7 @@ module vpu_stimulus_gen #(
     case (state)
       INIT: next_state = READ;
       READ: if (scan_result == 4) next_state = SEND;
-      SEND: if (cvxif_resp_i.issue_ready) next_state = READ;
+      SEND: if (x_issue_ready_i) next_state = READ;
     endcase
   end
 endmodule

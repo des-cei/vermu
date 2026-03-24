@@ -3,9 +3,6 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include "x-heep.h"
-#include "core_v_mini_mcu.h"
-#include "soc_sonhamos.h"
 
 int main(void) {
   

@@ -87,11 +87,21 @@ module obi_lsu_top
     
     // Address Generation
     always_comb begin
+        lsu_req             = '0;
+        lsu_we              = '0;
+        lsu_result_valid_o  = '0;
+        elem_bytes          = '0;
+        active_req_idx      = '0;
+        current_element_addr= '0;
+        next_word_addr      = '0;
+        adder_result_ex     = '0;
+        lsu_type            = '0;
 
         unique case (vpu_req_i.width)
             W_8:  elem_bytes = 3'd1;
             W_16: elem_bytes = 3'd2;
-            default:elem_bytes = 3'd4;
+            W_32: elem_bytes = 3'd4;
+            default: ;
         endcase
         
         active_req_idx = (!state_was_busy_i) ? 5'd0 : req_idx;
@@ -101,13 +111,13 @@ module obi_lsu_top
             2'b00: begin 
                 unique case (vpu_req_i.lumop)
                     5'b00000:  current_element_addr = base_addr + (active_req_idx * elem_bytes);  //unit-stride
-                    default: current_element_addr = '0;                                           
+                    default: ;                                           
                 endcase 
             end
             2'b10: begin 
                 current_element_addr = base_addr + (active_req_idx * vpu_req_i.rs2);
             end 
-            default: current_element_addr  = '0;                                                  //TODO: LS full support
+            default:;                                                  //TODO: LS full support
         endcase
 
         // Calculate misalignment increment
@@ -115,9 +125,6 @@ module obi_lsu_top
         adder_result_ex = addr_incr_req ? next_word_addr : current_element_addr;
 
         // begin: Request Control Logic
-        lsu_req = 1'b0;
-        lsu_we  = 1'b0;
-        lsu_result_valid_o = 1'b0;
         if(vpu_req_i.mopcode == load_fp) begin 
             if (buff_ready && (active_req_idx == vl_i)) 
                 lsu_result_valid_o = 1'b1; 
@@ -130,7 +137,8 @@ module obi_lsu_top
         unique case (vpu_req_i.width) 
             W_8:     lsu_type = 2'b10;  // Byte       
             W_16:    lsu_type = 2'b01;  // Half-word
-            default: lsu_type = 2'b00;  // Word 
+            W_32:    lsu_type = 2'b00;  // Word
+            default: ;  
         endcase
 
 

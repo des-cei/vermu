@@ -59,67 +59,60 @@ module simd_controller
     int bit_index; 
     int lane_idx; 
     int lane_offset; 
+    logic lanes_result_valid; 
 
     always_comb begin
         lane_limit = get_lane_limit(sew_i, vl_i); 
         sew_bits = get_sew_bits(sew_i);
     
-        for (int i = 0; i < NUM_LANES; i++) begin
-            lane_op_s1[i] = '0;
-            lane_op_s2[i] = '0;
-            lane_d[i]     = '0;
-        end
-        
-        if(!rst_ni) begin
-            for (int i = 0; i < NUM_LANES; i++) begin
-                lane_op_s1[i] = '0;
-                lane_op_s2[i] = '0;
-                lane_d[i]     = '0;
-            end
-        end else begin
-            for (int elem = 0; elem < vl_i; elem++) begin
-                bit_index   = elem * sew_bits;  
-                lane_idx    = bit_index / 32;   
-                lane_offset = bit_index % 32;   
-        
-                if (lane_idx < NUM_LANES) begin
-                    case (sew_i)
-                        SEW_8: begin
-                            lane_op_s1[lane_idx][lane_offset +: 8] = op_s1_i[bit_index +: 8];
-                            lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_i[bit_index +: 8];
-                            lane_d    [lane_idx][lane_offset +: 8] = op_d_i[bit_index +: 8]; 
-                            if(operation_i == VREDSUM) begin
-                                lane_op_s1[lane_idx][lane_offset +: 8] = 0;
-                                lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_i[bit_index +: 8];
-                            end
-                        end
-                        SEW_16: begin
-                            lane_op_s1[lane_idx][lane_offset +: 16] = op_s1_i[bit_index +: 16];
-                            lane_op_s2[lane_idx][lane_offset +: 16] = op_s2_i[bit_index +: 16];
-                            lane_d    [lane_idx][lane_offset +: 16] = op_d_i[bit_index +: 16];
-                            if(operation_i == VREDSUM) begin
-                                lane_op_s1[lane_idx][lane_offset +: 16] = 0;
-                                lane_op_s2[lane_idx][lane_offset +: 16] = op_s2_i[bit_index +: 16];
-                            end
-                        end
-                        SEW_32: begin
-                            lane_op_s1[lane_idx][lane_offset +: 32] = op_s1_i[bit_index +: 32];
-                            lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_i[bit_index +: 32];
-                            lane_d    [lane_idx][lane_offset +: 32] = op_d_i[bit_index +: 32];
-                            if(operation_i == VREDSUM) begin
-                                lane_op_s1[lane_idx][lane_offset +: 32] = 0;
-                                lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_i[bit_index +: 32];
-                            end
+        lane_op_s1  = '0;
+        lane_op_s2  = '0;
+        lane_d      = '0;
+        bit_index   = '0;
+        lane_idx    = '0;
+        lane_offset = '0;
 
+        for (int elem = 0; elem < vl_i; elem++) begin
+            bit_index   = elem * sew_bits;  
+            lane_idx    = bit_index / 32;   
+            lane_offset = bit_index % 32;   
+    
+            if (lane_idx < NUM_LANES) begin
+                case (sew_i)
+                    SEW_8: begin
+                        lane_op_s1[lane_idx][lane_offset +: 8] = op_s1_i[bit_index +: 8];
+                        lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_i[bit_index +: 8];
+                        lane_d    [lane_idx][lane_offset +: 8] = op_d_i[bit_index +: 8]; 
+                        if(operation_i == VREDSUM) begin
+                            lane_op_s1[lane_idx][lane_offset +: 8] = 0;
+                            lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_i[bit_index +: 8];
                         end
-                    endcase
-                end
-            end 
-        end
+                    end
+                    SEW_16: begin
+                        lane_op_s1[lane_idx][lane_offset +: 16] = op_s1_i[bit_index +: 16];
+                        lane_op_s2[lane_idx][lane_offset +: 16] = op_s2_i[bit_index +: 16];
+                        lane_d    [lane_idx][lane_offset +: 16] = op_d_i[bit_index +: 16];
+                        if(operation_i == VREDSUM) begin
+                            lane_op_s1[lane_idx][lane_offset +: 16] = 0;
+                            lane_op_s2[lane_idx][lane_offset +: 16] = op_s2_i[bit_index +: 16];
+                        end
+                    end
+                    SEW_32: begin
+                        lane_op_s1[lane_idx][lane_offset +: 32] = op_s1_i[bit_index +: 32];
+                        lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_i[bit_index +: 32];
+                        lane_d    [lane_idx][lane_offset +: 32] = op_d_i[bit_index +: 32];
+                        if(operation_i == VREDSUM) begin
+                            lane_op_s1[lane_idx][lane_offset +: 32] = 0;
+                            lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_i[bit_index +: 32];
+                        end
+
+                    end
+                endcase
+            end
+        end 
+
     end
-    
-    logic lanes_result_valid; 
-    
+        
     always_comb begin
         lanes_result_valid = 1'b1;
         for (int i = 0; i < 4; i++) begin
