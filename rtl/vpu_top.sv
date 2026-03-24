@@ -3,7 +3,6 @@ module vpu_top
  import rvv_instr_pkg::*;
  import vpu_pkg::*;
  import obi_pkg::*;
- import lsu_pkg::*;
  import vector_ops_pkg::*; 
 
 #(
@@ -23,12 +22,23 @@ module vpu_top
     parameter  type         cvxif_resp_t        = logic,
     localparam type         registers_t         = logic [NrRgprPorts-1:0][XLEN-1:0],
     parameter  int unsigned EXT_XBAR_NMASTER    = 1
-    ) (
+    ) ( 
+
     input logic        clk_i,   
     input logic        rst_ni,
-    
-    input  cvxif_req_t  cvxif_req_i,
-    output cvxif_resp_t cvxif_resp_o,
+    // CVXIF Interface
+    input logic               x_issue_valid_i,
+		output logic              x_issue_ready_o,
+		input x_issue_req_t       x_issue_req_i,
+		output x_issue_resp_t     x_issue_resp_o,
+		input x_register_t        x_register_i,
+    input logic               x_register_valid_i,
+    output logic              x_register_ready_o,
+		input logic               x_commit_valid_i,
+		input x_commit_t          x_commit_i,
+		output logic              x_result_valid_o,
+		input logic               x_result_ready_i,
+		output x_result_t         x_result_o,
 
     input  obi_resp_t [EXT_XBAR_NMASTER-1:0] masters_resp_i,
     output obi_req_t  [EXT_XBAR_NMASTER-1:0] masters_req_o
@@ -51,14 +61,14 @@ module vpu_top
   logic         we;
 
   // Issue and Register interface
-  assign cvxif_resp_o.issue_ready      = issue_ready; 
-  assign cvxif_resp_o.issue_resp       = issue_resp;
-  assign cvxif_resp_o.register_ready   = cvxif_resp_o.issue_ready;
+  assign x_issue_ready_o      = issue_ready; 
+  assign x_issue_resp_o       = issue_resp;
+  assign x_register_ready_o   = x_issue_ready_o;
 
-  assign issue_req                     = cvxif_req_i.issue_req;
-  assign issue_valid                   = cvxif_req_i.issue_valid;
-  assign register                      = cvxif_req_i.register;
-  assign register_valid                = cvxif_req_i.register_valid;
+  assign issue_req            = x_issue_req_i;
+  assign issue_valid          = x_issue_valid_i;
+  assign register             = x_register_i;
+  assign register_valid       = x_register_valid_i;
 
 /////// User ////////////
 
@@ -217,32 +227,32 @@ module vpu_top
   ////////////////////
 
   always_comb begin
-    cvxif_resp_o.result_valid  = result_valid; 
-    cvxif_resp_o.result.hartid = issue_hartid;
-    cvxif_resp_o.result.id     = issue_id;
+    x_result_valid_o  = result_valid; 
+    x_result_o.hartid = issue_hartid;
+    x_result_o.id     = issue_id;
 
     if (vpu_req.mopcode == op_v) begin
-      cvxif_resp_o.result.data = (vpu_req.funct3 == OPCFG_CSRRCI) ? csr_result : gpr_result; 
+      x_result_o.data = (vpu_req.funct3 == OPCFG_CSRRCI) ? csr_result : gpr_result; 
     end else if (vpu_req.mopcode == system) begin
-      cvxif_resp_o.result.data = csr_result;      
+      x_result_o.data = csr_result;      
     end else begin
-      cvxif_resp_o.result.data = '0; 
+      x_result_o.data = '0; 
     end 
 
-    cvxif_resp_o.result.rd      = (we && vpu_req.mopcode == op_v) ? vpu_req.rd : '0;
+    x_result_o.rd      = (we && vpu_req.mopcode == op_v) ? vpu_req.rd : '0;
 
     if (vpu_req.is_writeback) begin
       if(vpu_req.mopcode == op_v) begin
         if (vpu_req.funct3 == OPCFG_CSRRCI) begin
-          cvxif_resp_o.result.we     = we;
+          x_result_o.we     = we;
         end else begin
-          cvxif_resp_o.result.we     = done_w;
+          x_result_o.we     = done_w;
         end 
       end else if ( vpu_req.mopcode == system) begin  
-        cvxif_resp_o.result.we     = we;
+        x_result_o.we     = we;
       end 
     end else begin
-      cvxif_resp_o.result.we     = 1'b0; 
+      x_result_o.we     = 1'b0; 
     end
     
   end

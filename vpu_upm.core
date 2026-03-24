@@ -1,7 +1,7 @@
 CAPI=2:
 
 name: "ceiupm::vpu_upm"
-description: "First VPU for load store"
+description: "Vector Processing Unit Zve32x"
 
 filesets:
   files_rtl:
