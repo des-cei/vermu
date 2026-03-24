@@ -18,14 +18,13 @@ module vpu_top
     parameter  type         x_register_t        = logic,
     parameter  type         x_commit_t          = logic,
     parameter  type         x_result_t          = logic,
-    parameter  type         cvxif_req_t         = logic,
-    parameter  type         cvxif_resp_t        = logic,
     localparam type         registers_t         = logic [NrRgprPorts-1:0][XLEN-1:0],
     parameter  int unsigned EXT_XBAR_NMASTER    = 1
+    
     ) ( 
 
-    input logic        clk_i,   
-    input logic        rst_ni,
+    input logic               clk_i,   
+    input logic               rst_ni,
     // CVXIF Interface
     input logic               x_issue_valid_i,
 		output logic              x_issue_ready_o,
