@@ -104,10 +104,10 @@ module vpu_top
 
   interface vpu_debug_if;
       op_e          operation;
-      logic [127:0] rdata1;
-      logic [127:0] vrf_rdata2;
-      logic [127:0] vrf_vd_data;
-      logic [127:0] result; 
+      logic [VLEN-1:0] rdata1;
+      logic [VLEN-1:0] vrf_rdata2;
+      logic [VLEN-1:0] vrf_vd_data;
+      logic [VLEN-1:0] result; 
       logic simd_result_valid;
   endinterface
 

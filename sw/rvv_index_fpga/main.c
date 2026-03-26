@@ -112,9 +112,9 @@ void index_vec8(uint8_t *a, uint8_t *b, uint8_t *c, int n) {
         if (golden[i] != actual[i]) { pass = 0; break; } \
     } \
     \
-    float speedup = (float)cycles_golden / (float)(cycles_vec > 0 ? cycles_vec : 1); \
-    printf("vec" #NAME_SUFFIX " (N=%4d): %s | Golden: %d, Vector: %d | Speedup: %.2fx\r\n", \
-            CONST_N, pass ? "PASS" : "FAIL", cycles_golden, cycles_vec, speedup); \
+    int speedup = (cycles_vec > 0) ? (int)((100.0f * cycles_golden) / cycles_vec) : 0; \
+    printf("Test %-2d (N=%3d): %s | Gold: %5u, Vec: %5u | Speedup: %2d.%02dx\r\n", \
+          test_num, size, pass ? "PASS" : "FAIL", cycles_golden, cycles_vec, speedup / 100, speedup % 100);
   } while(0)
 
 

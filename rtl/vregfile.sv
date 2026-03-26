@@ -47,8 +47,8 @@ module vregfile
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
-            vreg     <= '0;
-            done_w_o <= 1'b0;
+            vreg           <= '0;
+            done_w_o       <= '0;
             bytes_per_elem <= '0;
             prestart       <= '0;
             body           <= '0;
@@ -73,7 +73,7 @@ module vregfile
                         bytes_per_elem = get_sew_bits(csr_vtype_i.vsew) >> 3;
                     end 
 
-                    for (int b = 0; b < 16; b++) begin : WRITE_LOOP
+                    for (int b = 0; b < VLENB; b++) begin : WRITE_LOOP
 
                         elem_idx = b / bytes_per_elem;
 

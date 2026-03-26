@@ -1,10 +1,9 @@
+#include "csr.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <math.h>
-#include "csr.h"
 #include <riscv_vector.h>
-
 
 #define N 32
 #define M 23
@@ -70,12 +69,7 @@ int16_t output_int16[M];
 int8_t output_golden_int8[O];
 int8_t output_int8[O];
 
-// Reads the RISC-V cycle counter (mcycle CSR)
-static inline uint32_t get_cycles(void) {
-    uint32_t cycles;
-    asm volatile ("csrr %0, mcycle" : "=r"(cycles));
-    return cycles;
-}
+
 
 // --- Golden Functions ---
 __attribute__((optimize("O3", "noinline", "no-tree-vectorize")))
@@ -135,7 +129,7 @@ void saxpy_vec_int16(size_t n, const int32_t a, const int16_t *x, int16_t *y)
     }
 }
 
-void saxpy_vec_int8(size_t n, const int8_t a, const int8_t *x, int8_t *y)
+void saxpy_vec_int8(size_t n, const int32_t a, const int8_t *x, int8_t *y)
 {
     for (size_t vl; n > 0; n -= vl, x += vl, y += vl)
     {
@@ -151,113 +145,82 @@ void saxpy_vec_int8(size_t n, const int8_t a, const int8_t *x, int8_t *y)
     }
 }
 
+__attribute__((optimize("O3", "no-tree-vectorize", "noinline")))
+static int compare_int32_no_vec(const int32_t *gold, const int32_t *vec, int size)
+{
+    for (int i = 0; i < size; i++) {
+        if (gold[i] != vec[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+__attribute__((optimize("O3", "no-tree-vectorize", "noinline")))
+static int compare_int16_no_vec(const int16_t *gold, const int16_t *vec, int size)
+{
+    for (int i = 0; i < size; i++) {
+        if (gold[i] != vec[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+__attribute__((optimize("O3", "no-tree-vectorize", "noinline")))
+static int compare_int8_no_vec(const int8_t *gold, const int8_t *vec, int size)
+{
+    for (int i = 0; i < size; i++) {
+        if (gold[i] != vec[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int main() {
+  unsigned int cycles_golden, cycles_vec;
+  int speedup;
+  int pass;
 
-    uint32_t start_cycles, end_cycles;
-    int total_errors = 0;
-    
-   printf("Golden, HW:\r\n");
-    // Test 1: int 32
-    int32_t a = 4;
+    #define RUN_TEST_SAXPY(test_num, size, scalar_a, golden_fn, vec_fn, input_buf, gold_buf, vec_buf, cmp_fn) \
+  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
+  CSR_WRITE(CSR_REG_MCYCLE, 0); \
+  golden_fn(size, scalar_a, input_buf, gold_buf); \
+  CSR_READ(CSR_REG_MCYCLE, &cycles_golden); \
+  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
+  CSR_WRITE(CSR_REG_MCYCLE, 0); \
+  vec_fn(size, scalar_a, input_buf, vec_buf); \
+  CSR_READ(CSR_REG_MCYCLE, &cycles_vec); \
+    pass = cmp_fn(gold_buf, vec_buf, size); \
+  speedup = (cycles_vec > 0) ? (int)((100.0f * cycles_golden) / cycles_vec) : 0; \
+  printf("Test %-2d (N=%3d): %s | Gold: %5u, Vec: %5u | Speedup: %2d.%02dx\r\n", \
+          test_num, size, pass ? "PASS" : "FAIL", cycles_golden, cycles_vec, speedup / 100, speedup % 100);
 
-    for (int i = 0; i < N; i++) {
-        output_golden_int32_A[i] = input_int32_A[i];
-        output_int32_A[i] = input_int32_A[i];
-    }
+  printf("Starting rvv_saxpy Performance Tests:\r\n");
+  int32_t a = 4;
 
+  // Test 1: int32
+  for (int i = 0; i < N; i++) {
+    output_golden_int32_A[i] = input_int32_A[i];
+    output_int32_A[i] = input_int32_A[i];
+  }
+    RUN_TEST_SAXPY(1, N, a, saxpy_golden_int32, saxpy_vec_int32, input_int32_A, output_golden_int32_A, output_int32_A, compare_int32_no_vec);
 
-    start_cycles = get_cycles();
-    saxpy_golden_int32(N, a, input_int32_A, output_golden_int32_A);
-    end_cycles = get_cycles();
-    printf("%u, ", end_cycles - start_cycles);
+  // Test 2: int16
+  for (int i = 0; i < M; i++) {
+    output_golden_int16[i] = input_int16[i];
+    output_int16[i] = input_int16[i];
+  }
+    RUN_TEST_SAXPY(2, M, a, saxpy_golden_int16, saxpy_vec_int16, input_int16, output_golden_int16, output_int16, compare_int16_no_vec);
 
+  // Test 3: int8
+  for (int i = 0; i < O; i++) {
+    output_golden_int8[i] = input_int8[i];
+    output_int8[i] = input_int8[i];
+  }
+    RUN_TEST_SAXPY(3, O, a, saxpy_golden_int8, saxpy_vec_int8, input_int8, output_golden_int8, output_int8, compare_int8_no_vec);
 
-    start_cycles = get_cycles();
-    saxpy_vec_int32(N, a, input_int32_A, output_int32_A);
-    end_cycles = get_cycles();
-    printf("%u \r\n", end_cycles - start_cycles);
-
-    int fails_t1 = 0;
-    for (int i = 0; i < N; i++) {
-        if (output_golden_int32_A[i] != output_int32_A[i]) {
-            printf("FAIL at A %d : golden=%d, vec=%d\r\n",
-                   i, output_golden_int32_A[i], output_int32_A[i]);
-            fails_t1++;
-        }
-    }
-
-
-    if (fails_t1 == 0) printf("PASS 1\r\n");
-    else printf("\r\n  T1 F %d er\r\n", fails_t1);
-    total_errors += fails_t1;
-
-    //Test 2: int 16
-    for (int i = 0; i < M; i++) {
-        output_golden_int16[i] = input_int16[i];
-        output_int16[i] = input_int16[i];
-    }
-
-    start_cycles = get_cycles();
-    saxpy_golden_int16(M, a, input_int16, output_golden_int16);
-    end_cycles = get_cycles();
-    printf("%u, ", end_cycles - start_cycles);
-
-    start_cycles = get_cycles();
-    saxpy_vec_int16(M, a, input_int16, output_int16);
-    end_cycles = get_cycles();
-    printf("%u\r\n", end_cycles - start_cycles);
-
-    int fails_t2 = 0;
-    for (int i = 0; i < M; i++) {
-        if (output_golden_int16[i] != output_int16[i]) {
-            printf("\r\n  FAIL at idx %d : golden=%d, vec=%d",
-                   i, output_golden_int16[i], output_int16[i]);
-            fails_t2++;
-        }
-    }
-
-    if (fails_t2 == 0) printf("PASS 2\r\n");
-    else printf("\r\n  T2 %d errors\r\n", fails_t2);
-    total_errors += fails_t2;
-
-
-    // Test 3: int 8 
-    for (int i = 0; i < O; i++) {
-        output_golden_int8[i] = input_int8[i];
-        output_int8[i] = input_int8[i];
-    }
-
-    start_cycles = get_cycles();
-    saxpy_golden_int8(O, a, input_int8, output_golden_int8);
-    end_cycles = get_cycles();
-    printf("%u, ", end_cycles - start_cycles);
-
-    start_cycles = get_cycles();
-    saxpy_vec_int8(O, a, input_int8, output_int8);
-    end_cycles = get_cycles();
-    printf("%u \r\n", end_cycles - start_cycles);
-
-    int fails_t3 = 0;
-    for (int i = 0; i < O; i++) {
-        if (output_golden_int8[i] != output_int8[i]) {
-            printf("\r\n  FAIL at idx %d : golden=%d (0x%02X), vec=%d (0x%02X)",
-                   i, output_golden_int8[i], (uint8_t)output_golden_int8[i], 
-                      output_int8[i], (uint8_t)output_int8[i]);
-            fails_t3++;
-        }
-    }
-
-    if (fails_t3 == 0) printf("PASS 3\r\n");
-    else printf("\r\n  T3 FAILED %d err\r\n", fails_t3);
-    total_errors += fails_t3;
-
-    // Final report
-    if (total_errors == 0) {
-        printf("\r\nALL PASSED.\r\n");
-        return 0;
-    } else {
-        printf("\r\nFAILURES: %d\r\n", total_errors);
-        return 1;
-    }
+  return 0;
 }
 

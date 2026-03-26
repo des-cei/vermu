@@ -29,7 +29,7 @@ module obi_lsu_top
     logic vrf_rdata_done_q;
     logic lsu_resp_valid_q;
     logic [1:0] lsu_type;
-    logic [4:0] req_idx, req_idx_next, active_req_idx;
+    vl_t         req_idx, req_idx_next, active_req_idx;
     logic [2:0]  elem_bytes;
     logic [31:0] lsu_wdata, lsu_rdata;
     logic [31:0] adder_result_ex;
@@ -40,8 +40,8 @@ module obi_lsu_top
 
     // Buffer signals
     logic [VLEN-1:0] int_buff;   
-    logic [4:0]   buff_counter;   
-    logic         buff_ready, buff_ready_q;    
+    vl_t             buff_counter;   
+    logic            buff_ready, buff_ready_q;    
     
 
  

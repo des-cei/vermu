@@ -1,14 +1,9 @@
+#include "csr.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "common.h"
 #include <riscv_vector.h>
-
-  static inline uint32_t get_cycles(void) {
-      uint32_t cycles;
-      asm volatile ("csrr %0, mcycle" : "=r"(cycles));
-      return cycles;
-  }
 
 // matrix multiplication (B is expected in transposed form)
 // A[n][o], B[m][o] --> C[n][m];
@@ -125,90 +120,58 @@ int main() {
   const int M = 8;
   const int O = 7;
 
-  // Timer variables
-  uint32_t start_cycles, end_cycles;
-  printf("Golden, HW:\r\n");
+  unsigned int cycles_golden, cycles_vec;
+  int speedup;
+  int pass;
 
-  //T1 : sew 32
-  uint32_t seed32 = 0xdeadbeef;
-  srand(seed32);
+  #define RUN_TEST_MATMUL(test_num, size_n, size_m, size_o, golden_fn, vec_fn, type_name, A_mat, B_mat, gold_mat, actual_mat) \
+  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
+  CSR_WRITE(CSR_REG_MCYCLE, 0); \
+  golden_fn(A_mat, B_mat, gold_mat, size_n, size_m, size_o); \
+  CSR_READ(CSR_REG_MCYCLE, &cycles_golden); \
+  \
+  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
+  CSR_WRITE(CSR_REG_MCYCLE, 0); \
+  vec_fn(A_mat, B_mat, actual_mat, size_n, size_m, size_o); \
+  CSR_READ(CSR_REG_MCYCLE, &cycles_vec); \
+  \
+  pass = compare_2d_##type_name(gold_mat, actual_mat, size_n, size_m); \
+  speedup = (cycles_vec > 0) ? (int)((100.0f * cycles_golden) / cycles_vec) : 0; \
+  \
+  printf("Test %-2d (N=%d,M=%d,O=%d): %s | Gold: %5u, Vec: %5u | Speedup: %2d.%02dx\r\n", \
+          test_num, size_n, size_m, size_o, pass ? "PASS" : "FAIL", cycles_golden, cycles_vec, speedup / 100, speedup % 100);
 
-  //data gen
+  printf("Starting rvv_matmul Performance Tests:\r\n");
+
+  // TEST 1: int32
+  srand(0xdeadbeef);
   int32_t **A = alloc_array_2d_int32(N, O);
-  int32_t **B = alloc_array_2d_int32(M, O); 
+  int32_t **B = alloc_array_2d_int32(M, O);
   gen_rand_2d_int32(A, N, O);
   gen_rand_2d_int32(B, M, O);
-
-
-  // compute
   int32_t **golden32 = alloc_array_2d_int32(N, M);
   int32_t **actual32 = alloc_array_2d_int32(N, M);
-  
-  start_cycles = get_cycles();
-  matmul_golden32(A, B, golden32, N, M, O);
-  end_cycles = get_cycles();
-  printf("%u, ", end_cycles - start_cycles);
-  
-  start_cycles = get_cycles();
-  matmul32(A, B, actual32, N, M, O);
-  end_cycles = get_cycles();
-  printf("%u \r\n", end_cycles - start_cycles);
+  RUN_TEST_MATMUL(1, N, M, O, matmul_golden32, matmul32, int32, A, B, golden32, actual32);
 
-  puts(compare_2d_int32(golden32, actual32, N, M) ? "pass" : " T1 fail");
-
-  //T2 : sew 16
-  uint16_t seed16 = 0xbeef;
-  srand(seed16);
-
-  //data gen
+  // TEST 2: int16
+  srand(0xbeef);
   int16_t **C = alloc_array_2d_int16(N, O);
-  int16_t **D = alloc_array_2d_int16(M, O); 
+  int16_t **D = alloc_array_2d_int16(M, O);
   gen_rand_2d_int16(C, N, O);
   gen_rand_2d_int16(D, M, O);
-
-
-  // compute
   int16_t **golden16 = alloc_array_2d_int16(N, M);
   int16_t **actual16 = alloc_array_2d_int16(N, M);
- 
-  start_cycles = get_cycles();
-  matmul_golden16(C, D, golden16, N, M, O);
-  end_cycles = get_cycles();
-  printf("%u, ", end_cycles - start_cycles);
+  RUN_TEST_MATMUL(2, N, M, O, matmul_golden16, matmul16, int16, C, D, golden16, actual16);
 
-  start_cycles = get_cycles();
-  matmul16(C, D, actual16, N, M, O);
-  end_cycles = get_cycles();
-  printf("%u \r\n", end_cycles - start_cycles);
-
-  // compare
-  puts(compare_2d_int16(golden16, actual16, N, M) ? "pass" : " T2 fail");
-
-  //T3 : sew 8
-  uint8_t seed8 = 0xde;
-  srand(seed8);
-
-  //data gen
+  // TEST 3: int8
+  srand(0xde);
   int8_t **E = alloc_array_2d_int8(N, O);
-  int8_t **F = alloc_array_2d_int8(M, O); 
+  int8_t **F = alloc_array_2d_int8(M, O);
   gen_rand_2d_int8(E, N, O);
   gen_rand_2d_int8(F, M, O);
-
-
-  // compute
   int8_t **golden8 = alloc_array_2d_int8(N, M);
   int8_t **actual8 = alloc_array_2d_int8(N, M);
+  RUN_TEST_MATMUL(3, N, M, O, matmul_golden8, matmul8, int8, E, F, golden8, actual8);
 
-  start_cycles = get_cycles();
-  matmul_golden8(E, F, golden8, N, M, O);
-  end_cycles = get_cycles();
-  printf("%u, ", end_cycles - start_cycles);
-
-  start_cycles = get_cycles();
-  matmul8(E, F, actual8, N, M, O);
-  end_cycles = get_cycles();
-  printf("%u \r\n", end_cycles - start_cycles);
-
-  // compare
-  puts(compare_2d_int8(golden8, actual8, N, M) ? "pass" : " T3 fail");
+  return 0;
 }

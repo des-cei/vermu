@@ -115,7 +115,7 @@ module simd_controller
         
     always_comb begin
         lanes_result_valid = 1'b1;
-        for (int i = 0; i < 4; i++) begin
+        for (int i = 0; i < NUM_LANES; i++) begin
             lanes_result_valid &= lane_result_valid[i];
         end
     end

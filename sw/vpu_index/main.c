@@ -54,216 +54,84 @@ int main() {
   const int M = 62;
   const int O = 93;
 
-  unsigned int cycles;
+  unsigned int cycles_golden, cycles_vec;
+  int speedup;
+  int pass;
 
-  printf("Golden, HW:\r\n");
-  
-  // TEST 1
+  #define RUN_TEST(test_num, size, golden_fn, vec_fn, gold_arr, act_arr) \
+  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
+  CSR_WRITE(CSR_REG_MCYCLE, 0); \
+  golden_fn(gold_arr, B_ptr, C_ptr, size); \
+  CSR_READ(CSR_REG_MCYCLE, &cycles_golden); \
+  \
+  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
+  CSR_WRITE(CSR_REG_MCYCLE, 0); \
+  vec_fn(act_arr, B_ptr, C_ptr, size); \
+  CSR_READ(CSR_REG_MCYCLE, &cycles_vec); \
+  \
+  pass = 1; \
+  for(int i=0; i<size; i++) { if (gold_arr[i] != act_arr[i]) { pass = 0; break; } } \
+  speedup = (cycles_vec > 0) ? (int)((100.0f * cycles_golden) / cycles_vec) : 0; \
+  \
+  printf("Test %-2d (N=%3d): %s | Gold: %5u, Vec: %5u | Speedup: %2d.%02dx\r\n", \
+          test_num, size, pass ? "PASS" : "FAIL", cycles_golden, cycles_vec, speedup / 100, speedup % 100);
 
-  const uint32_t seed = 0xdeadbeef;
-  srand(seed);
+  printf("Starting vpu_index Performance Tests:\r\n");
+  void *B_ptr, *C_ptr;
 
+  srand(0xdeadbeef);
+  uint32_t B[N], C[N], goldenN[N], actualN[N];
+  for(int i=0; i<N; i++) { B[i] = rand(); C[i] = rand(); }
+  B_ptr = B; C_ptr = C;
+  RUN_TEST(1, N, index_golden32, index_vec32, goldenN, actualN);
 
-  uint32_t B[N], C[N];
+  srand(0xcafebabe);
+  uint32_t D[M], E[M], goldenM[M], actualM[M];
+  for(int i=0; i<M; i++) { D[i] = rand(); E[i] = rand(); }
+  B_ptr = D; C_ptr = E;
+  RUN_TEST(2, M, index_golden32, index_vec32, goldenM, actualM);
 
-  for(int i=0; i<N; i++) { B[i] = rand(); C[i] = rand(); } 
+  srand(0x1234567);
+  uint32_t F[O], G[O], goldenO[O], actualO[O];
+  for(int i=0; i<O; i++) { F[i] = rand(); G[i] = rand(); }
+  B_ptr = F; C_ptr = G;
+  RUN_TEST(3, O, index_golden32, index_vec32, goldenO, actualO);
 
-  uint32_t goldenN[N], actualN[N];
+  srand(0xdead);
+  uint16_t H[N], J[N], golden4[N], actual4[N];
+  for(int i=0; i<N; i++) { H[i] = rand(); J[i] = rand(); }
+  B_ptr = H; C_ptr = J;
+  RUN_TEST(4, N, index_golden16, index_vec16, golden4, actual4);
 
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_golden32(goldenN, B, C, N);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d, ", cycles);
+  srand(0xcafe);
+  uint16_t K[M], L[M], golden5[M], actual5[M];
+  for(int i=0; i<M; i++) { K[i] = rand(); L[i] = rand(); }
+  B_ptr = K; C_ptr = L;
+  RUN_TEST(5, M, index_golden16, index_vec16, golden5, actual5);
 
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_vec32(actualN, B, C, N);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d \r\n", cycles);
+  srand(0x1234);
+  uint16_t AA[O], BB[O], golden6[O], actual6[O];
+  for(int i=0; i<O; i++) { AA[i] = rand(); BB[i] = rand(); }
+  B_ptr = AA; C_ptr = BB;
+  RUN_TEST(6, O, index_golden16, index_vec16, golden6, actual6);
 
-  int pass = 1;
-  for(int i=0; i<N; i++) {
-      if (goldenN[i] != actualN[i]) { pass = 0; break; }
-  }
-  puts(pass ? "pass 1" : "fail 1");
-
-  // TEST 2
-  const uint32_t seed2 = 0xcafebabe;
-  srand(seed2);
-
-
-  uint32_t D[M], E[M];
-
-  for(int i=0; i<M; i++) { D[i] = rand(); E[i] = rand(); } 
-
-  uint32_t goldenM[M], actualM[M];
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_golden32(goldenM, D, E, M);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d, ", cycles);
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_vec32(actualM, D, E, M);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d \r\n", cycles);
-
-  pass = 1;
-  for(int i=0; i<M; i++) {
-      if (goldenM[i] != actualM[i]) { pass = 0; break; }
-  }
-  puts(pass ? "pass 2" : "fail 2");
-
-  // TEST 3
-  const uint32_t seed3 = 0x1234567;
-  srand(seed3);
-
-
-  uint32_t F[O], G[O];
-
-  for(int i=0; i<O; i++) { F[i] = rand(); G[i] = rand(); } 
-
-  uint32_t goldenO[O], actualO[O];
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_golden32(goldenO, F, G, O);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d, ", cycles);
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_vec32(actualO, F, G, O);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d \r\n", cycles);
-
-  pass = 1;
-  for(int i=0; i<O; i++) {
-      if (goldenO[i] != actualO[i]) { pass = 0; break; }
-  }
-  puts(pass ? "pass 3" : "fail 3");
-
-  
-  // TEST 4
-
-  const uint16_t seed4 = 0xdead;
-  srand(seed4);
-
-
-  uint16_t H[N], J[N];
-
-  for(int i=0; i<N; i++) { H[i] = rand(); J[i] = rand(); } 
-
-  uint16_t golden4[N], actual4[N];
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_golden16(golden4, H, J, N);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d, ", cycles);
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_vec16(actual4, H, J, (uint16_t)N);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d \r\n", cycles);
-
-  pass = 1;
-  for(int i=0; i<N; i++) {
-      if (golden4[i] != actual4[i]) { pass = 0; break; }
-  }
-  puts(pass ? "pass 4" : "fail 4");
-
-  // TEST 5
-
-  const uint16_t seed5 = 0xcafe;
-  srand(seed5);
-
-
-  uint16_t K[M], L[M];
-
-  for(int i=0; i<M; i++) { K[i] = rand(); L[i] = rand(); } 
-
-  uint16_t golden5[M], actual5[M];
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_golden16(golden5, K, L, M);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d, ", cycles);
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_vec16(actual5, K, L, (uint16_t)M);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d \r\n", cycles);
-
-  pass = 1;
-  for(int i=0; i<M; i++) {
-      if (golden5[i] != actual5[i]) { pass = 0; break; }
-  }
-  puts(pass ? "pass 5" : "fail 5");
-
-  // TEST 6
-
-  const uint16_t seed6 = 0x1234;
-  srand(seed6);
-
-
-  uint16_t AA[O], BB[O];
-
-  for(int i=0; i<O; i++) { AA[i] = rand(); BB[i] = rand(); } 
-
-  uint16_t golden6[O], actual6[O];
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_golden16(golden6, AA, BB, O);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d, ", cycles);
-
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_vec16(actual6, AA, BB, (uint16_t)O);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d \r\n", cycles);
-
-  pass = 1;
-  for(int i=0; i<O; i++) {
-      if (golden6[i] != actual6[i]) { pass = 0; break; }
-  }
-  puts(pass ? "pass 6" : "fail 6");
-
-  
-  // TEST 7 (uint8, N)
-  
-  const uint8_t seed7 = 0xde;
-  srand(seed7);
-
-  uint8_t U[N], V[N];
+  srand(0xde);
+  uint8_t U[N], V[N], golden7[N], actual7[N];
   for (int i = 0; i < N; i++) { U[i] = rand(); V[i] = rand(); }
+  B_ptr = U; C_ptr = V;
+  RUN_TEST(7, N, index_golden8, index_vec8, golden7, actual7);
 
-  uint8_t golden7[N], actual7[N];
+  srand(0xca);
+  uint8_t W[M], X[M], golden8[M], actual8[M];
+  for (int i = 0; i < M; i++) { W[i] = rand(); X[i] = rand(); }
+  B_ptr = W; C_ptr = X;
+  RUN_TEST(8, M, index_golden8, index_vec8, golden8, actual8);
 
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_golden8(golden7, U, V, N);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d, ", cycles);
+  srand(0x12);
+  uint8_t Y[O], Z[O], golden9[O], actual9[O];
+  for (int i = 0; i < O; i++) { Y[i] = rand(); Z[i] = rand(); }
+  B_ptr = Y; C_ptr = Z;
+  RUN_TEST(9, O, index_golden8, index_vec8, golden9, actual9);
 
-  CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1);
-  CSR_WRITE(CSR_REG_MCYCLE, 0);
-  index_vec8(actual7, U, V, (uint8_t)N);
-  CSR_READ(CSR_REG_MCYCLE, &cycles);
-  printf("%d \r\n", cycles);
-
-  pass = 1;
-  for (int i = 0; i < N; i++) {
-    if (golden7[i] != actual7[i]) { pass = 0; break; }
-  }
-  puts(pass ? "pass 7" : "fail 7");
-
+  return 0;
 }

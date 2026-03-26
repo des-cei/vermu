@@ -101,7 +101,7 @@ void index_vec8(uint8_t *__restrict a, uint8_t *__restrict b, uint8_t *c, int n)
         if (golden[i] != actual[i]) { pass = 0; break; } \
     } \
     \
-int speedup = (cycles_vec > 0) ? (int)((100.0f * cycles_golden) / cycles_vec) : 0; \
+    int speedup = (cycles_vec > 0) ? (int)((100.0f * cycles_golden) / cycles_vec) : 0; \
     printf("vec" #NAME_SUFFIX " (N=%4d): %s | Golden: %d, Vector: %d | Speedup: %d.%02dx\r\n", \
             CONST_N, pass ? "PASS" : "FAIL", cycles_golden, cycles_vec, speedup / 100, speedup % 100); \
   } while(0)
