@@ -1,4 +1,6 @@
 build/
 sw/build/
 tb/*.do
+!tb/wave_automatize.do
+tb/env.sh
 transcript

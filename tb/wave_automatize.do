@@ -1,13 +1,6 @@
 onerror {resume}
 quietly WaveActivateNextPane {} 0
 add wave -noupdate /tb_vpu_top/clk_i
-add wave -noupdate /tb_vpu_top/cvxif_req
-add wave -noupdate /tb_vpu_top/cvxif_resp
-add wave -noupdate -expand -group stim_gen /tb_vpu_top/i_stim_gen/cvxif_req_o
-add wave -noupdate -expand -group stim_gen /tb_vpu_top/i_stim_gen/cvxif_resp_i
-add wave -noupdate -expand -group stim_gen -color {Dark Orchid} /tb_vpu_top/i_stim_gen/cvxif_req_o.issue_valid
-add wave -noupdate -expand -group stim_gen -color {Dark Orchid} /tb_vpu_top/i_stim_gen/cvxif_resp_i.issue_ready
-add wave -noupdate -expand -group stim_gen -color {Dark Orchid} /tb_vpu_top/i_stim_gen/cvxif_resp_i.result_valid
 add wave -noupdate -expand -group stim_gen /tb_vpu_top/i_stim_gen/curr_instr
 add wave -noupdate -expand -group stim_gen /tb_vpu_top/i_stim_gen/file_handle
 add wave -noupdate -expand -group stim_gen /tb_vpu_top/i_stim_gen/scan_result
@@ -22,8 +15,6 @@ add wave -noupdate -expand -group Debug /tb_vpu_top/i_vpu/debug_if/vrf_vd_data
 add wave -noupdate -expand -group Debug /tb_vpu_top/i_vpu/debug_if/result
 add wave -noupdate -expand -group Debug /tb_vpu_top/i_vpu/debug_if/simd_result_valid
 add wave -noupdate -divider VPU
-add wave -noupdate -group vpu /tb_vpu_top/i_vpu/cvxif_req_i
-add wave -noupdate -group vpu /tb_vpu_top/i_vpu/cvxif_resp_o
 add wave -noupdate -group vpu /tb_vpu_top/i_vpu/issue_req
 add wave -noupdate -group vpu /tb_vpu_top/i_vpu/issue_resp
 add wave -noupdate -group vpu /tb_vpu_top/i_vpu/issue_ready
@@ -64,10 +55,7 @@ add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/state_
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/vrf_we_o
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/op_valid_simd_o
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/illegal_req_o
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vl_o
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/vlmax_o
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vtype_o
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vstart_o
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_we_o
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_result_valid_o
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/result_o
@@ -86,12 +74,6 @@ add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_we
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_we_q
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_valid_d
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_valid_q
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vtype_d
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vtype_q
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vl_d
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vl_q
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vstart_d
-add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/csr_vstart_q
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/issue_rs1
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/issue_rd
 add wave -noupdate -group instr_decoder /tb_vpu_top/i_vpu/instr_decoder_i/result_d
@@ -136,7 +118,6 @@ add wave -noupdate -group simd_controller /tb_vpu_top/i_vpu/simd_controller_i/la
 add wave -noupdate -group vregfile /tb_vpu_top/i_vpu/vregfile_i/vpu_req_i
 add wave -noupdate -group vregfile /tb_vpu_top/i_vpu/vregfile_i/csr_vtype_i
 add wave -noupdate -group vregfile /tb_vpu_top/i_vpu/vregfile_i/csr_vl_i
-add wave -noupdate -group vregfile /tb_vpu_top/i_vpu/vregfile_i/csr_vstart_i
 add wave -noupdate -group vregfile /tb_vpu_top/i_vpu/vregfile_i/op_valid_i
 add wave -noupdate -group vregfile /tb_vpu_top/i_vpu/vregfile_i/funct3_i
 add wave -noupdate -group vregfile /tb_vpu_top/i_vpu/vregfile_i/waddr_i
@@ -165,7 +146,6 @@ add wave -noupdate -group lane_3 {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[
 add wave -noupdate -group lane_3 {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/result_o}
 add wave -noupdate -group lane_3 {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/result_valid_o}
 add wave -noupdate -group lane_3 -expand {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/result_valid}
-add wave -noupdate -group lane_3 {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/expand}
 add wave -noupdate -group lane_3 {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/activate_lane}
 add wave -noupdate -group lane_3 -group lane_8b1 {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/op_s1_8b1}
 add wave -noupdate -group lane_3 -group lane_8b1 {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/op_s2_8b1}
@@ -191,12 +171,10 @@ add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lane
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/op_s2_i}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/op_d_i}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/is_signed_i}
-add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/expand_i}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/carry_i}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/sew_i}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/result_o}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/result_valid_o}
-add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/sew}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/is_mult}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/mult_result}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/mult_op1}
@@ -213,7 +191,7 @@ add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lane
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/comp_op_1}
 add wave -noupdate -group lane_32b {/tb_vpu_top/i_vpu/simd_controller_i/gen_lanes[3]/i_VAU_lane/i_lane_32b/comp_op_2}
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {8191013 ps} 0}
+WaveRestoreCursors {{Cursor 1} {140 ns} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 352
 configure wave -valuecolwidth 224
@@ -229,4 +207,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ps
 update
-WaveRestoreZoom {8162232 ps} {8302180 ps}
+WaveRestoreZoom {8162 ns} {8302 ns}

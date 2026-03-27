@@ -14,5 +14,24 @@ To enable autovectorization, the RISC-V GNU Compiler Toolchain (GCC v15) is requ
 ```
 
 ### VPU Overview
-<img src="block_diagrams/vermu_top.png" width="500">
+<img src="block_diagrams/vpu_top.png" width="500">
 
+### Local environment setup
+A testbench environment template is available at `tb/env.template.sh` for users who are not utilizing the X-HEEP environment.
+
+1. Create your local machine-specific script:
+
+```bash
+cp tb/env.template.sh tb/env.sh
+```
+
+2. Edit `tb/env.sh` with your local tool and license paths.
+
+3. Source the environment before running simulation-related Make targets:
+
+```bash
+source tb/env.sh
+make build-sim
+make run-vpu-unit-test
+make run-vpu-unit-gui
+```

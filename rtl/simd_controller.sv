@@ -1,7 +1,7 @@
-// SIMD Controller 
-// Generation of four packed SIMD units to support input vector of VLEN = 128.
-// Connects the input vector elements with the SIMD blocks. Considers the number
-// of vector elements to operate (vl). 
+// Copyright 2024 CEIMM-UPM
+// Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
+// SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
+// Ane Corral (ane.corral@upm.es)
 
 module simd_controller 
     import vpu_pkg::*; 
@@ -32,7 +32,7 @@ module simd_controller
     logic [NUM_LANES-1:0][31:0] lane_result;
     logic [NUM_LANES-1:0]       lane_result_valid;
 
-
+    //SIMD Block generation
     genvar i;
     generate
         for (i = 0; i < NUM_LANES; i++) begin : gen_lanes
