@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
-
 module VAU_lanes 
  import vpu_pkg::*; 
  import vector_ops_pkg::*;

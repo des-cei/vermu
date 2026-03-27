@@ -6,7 +6,6 @@
 module vpu_top
  import rvv_instr_pkg::*;
  import vpu_pkg::*;
- import obi_pkg::*;
  import vector_ops_pkg::*; 
 
 #(
@@ -23,6 +22,8 @@ module vpu_top
     parameter  type         x_commit_t          = logic,
     parameter  type         x_result_t          = logic,
     localparam type         registers_t         = logic [NrRgprPorts-1:0][XLEN-1:0],
+    parameter  type         obi_req_t           = logic,
+    parameter  type         obi_resp_t          = logic,
     parameter  int unsigned EXT_XBAR_NMASTER    = 1
     
     ) ( 
@@ -168,7 +169,9 @@ module vpu_top
   );
 
     obi_lsu_top #(
-      .opcode_t   (rvv_instr_pkg::opcode_t)
+      .opcode_t   (rvv_instr_pkg::opcode_t),
+      .obi_req_t  (obi_req_t),
+      .obi_resp_t (obi_resp_t)
     ) obi_lsu_top_i (
       .clk_i             (clk_i),   
       .rst_ni            (rst_ni),

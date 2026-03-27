@@ -6,6 +6,7 @@
 module tb_vpu_top;
 
     import cvxif_types_pkg::*;
+    import obi_pkg::*;
 
     logic clk_i;
     logic rst_ni;
@@ -72,7 +73,9 @@ module tb_vpu_top;
         .x_issue_resp_t (cvxif_types_pkg::x_issue_resp_t),
         .x_register_t   (cvxif_types_pkg::x_register_t),
         .x_commit_t     (cvxif_types_pkg::x_commit_t),
-        .x_result_t     (cvxif_types_pkg::x_result_t)
+        .x_result_t     (cvxif_types_pkg::x_result_t),
+        .obi_req_t      (obi_pkg::obi_req_t),
+        .obi_resp_t     (obi_pkg::obi_resp_t)
     ) i_vpu (
         .clk_i             (clk_i),
         .rst_ni            (rst_ni),

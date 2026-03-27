@@ -4,18 +4,18 @@
 // Ane Corral (ane.corral@upm.es)
 
 module obi_lsu_top
- import obi_pkg::*;
  import vpu_pkg::*;
- import cvxif_types_pkg::*;
  #(
     parameter type opcode_t                  = logic,
+    parameter type obi_req_t                 = logic,
+    parameter type obi_resp_t                = logic,
     parameter  int unsigned EXT_XBAR_NMASTER = 1
  )(
     input logic      clk_i,   
     input logic      rst_ni,
-    input  vpu_req_t vpu_req_i,
-    input  vl_t      vl_i,
-    input  xlen_t    vlmax_i,
+    input vpu_req_t  vpu_req_i,
+    input vl_t       vl_i,
+    input xlen_t     vlmax_i,
     input logic      state_was_busy_i,
     input vlen_t     vrf_rdata_i,            // Input data 
     input logic      vrf_rdata_done_i,       
