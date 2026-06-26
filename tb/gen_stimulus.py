@@ -3,21 +3,25 @@
 # SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 # Ane Corral (ane.corral@upm.es)
 
+# Extracts compiled vector instructions from main.S assembly code and writes them to a .txt file
+# for simulation stimulus injection. Generates random scalar values for RS1 and RS2 operands as
+# required by the vector instructions. 
+
 import sys
 import re
 import random
 
 def parse_assembly(input_file, output_txt, target_function="main"):
-    # 1. Matches hex instructions: "    3ef0:    02810e27     vs1r.v    v28,(sp)"
+    # Matches hex instructions: "    3ef0:    02810e27     vs1r.v    v28,(sp)"
     instr_pattern = re.compile(r"^\s*[0-9a-f]+:\s+([0-9a-f]{8})\s+([a-zA-Z0-9\.]+)")
     
-    # 2. Matches objdump function headers: "80000120 <main>:"
+    # Matches objdump function headers: "80000120 <main>:"
     objdump_func_pattern = re.compile(r"^[0-9a-fA-F]+\s+<([a-zA-Z0-9_]+)>:")
     
-    # 3. Matches raw assembly labels: "main:"
+    # Matches raw assembly labels: "main:"
     raw_label_pattern = re.compile(r"^([a-zA-Z0-9_]+):$")
     
-    # The exact 7-bit RISC-V opcodes for your VPU
+    # The exact 7-bit RISC-V opcodes for VPU
     valid_opcodes = {0x07, 0x27, 0x57, 0x73}
     
     inside_target = False

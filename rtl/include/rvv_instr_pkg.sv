@@ -6,738 +6,443 @@
 
 package rvv_instr_pkg; 
 
-    typedef enum logic [6:0] {   
-        ILLEGAL,
-        NOP,
-        VLE8,
-        VLE16,
-        VLE32,
-        VLSE8,
-        VLSE16,
-        VLSE32,
-        VL1RE32_V,
-        VSE8,
-        VSE16,
-        VSE32,
-        VS1R_V,  
-        VSETVLI,
-        VSETIVLI,
-        VSETVL,
-        CSRRS,
-        VADD_VV,
-        VADD_VI,
-        VADD_VX,
-        VSUB_VV,
-        VSUB_VX,
-        VRSUB_VX,
-        VRSUB_VI,
-        VAND_VV,
-        VAND_VI,
-        VAND_VX,
-        VOR_VV,
-        VOR_VI,
-        VOR_VX,
-        VXOR_VV,
-        VXOR_VI,
-        VXOR_VX,
-        VSLL_VV,
-        VSLL_VX,
-        VSLL_VI,
-        VSRL_VV,
-        VSRL_VX,
-        VSRL_VI,
-        VSRA_VV,
-        VSRA_VX,
-        VSRA_VI,
-        VMINU_VV,
-        VMINU_VX,
-        VMIN_VV,
-        VMIN_VX,
-        VMAXU_VV,
-        VMAXU_VX,
-        VMAX_VV,
-        VMAX_VX,
-        VMSEQ_VV,
-        VMSEQ_VX,
-        VMSEQ_VI,
-        VMSNE_VV,
-        VMSNE_VX,
-        VMSNE_VI,
-        VMSLTU_VV,
-        VMSLTU_VX,
-        VMSLT_VV,
-        VMSLT_VX,
-        VMUL_VV,
-        VMUL_VX,
-        VMULH_VV,
-        VMULH_VX,
-        VMULHU_VV,
-        VMULHU_VX,
-        VMULHSU_VV,
-        VMULHSU_VX,
-        VMACC_VV,
-        VMACC_VX,
-        VNMSAC_VV,
-        VNMSAC_VX,
-        VMADD_VV,
-        VMADD_VX,
-        VMERGE_VVM,
-        VMERGE_VXM,
-        VMERGE_VIM,
-        VMV_VV,
-        VMV_VX,
-        VMV_VI,
-        VMV_XS,
-        VMV_SX,
-        VMV1R_V,
-        VMV2R_V,
-        VMV4R_V,
-        VMV8R_V,
+    typedef enum logic [8:0] {   
+
+        INSTR_NONE = '0,
+
+        //  Integer arithmetic: OPIVV / OPIVX / OPIVI 
+        VADD_VV,   VADD_VX,  VADD_VI,
+        VSUB_VV,   VSUB_VX,
+        VRSUB_VX,  VRSUB_VI,
+        VAND_VV,   VAND_VX,   VAND_VI,
+        VOR_VV,    VOR_VX,    VOR_VI,
+        VXOR_VV,   VXOR_VX,   VXOR_VI,
+        VSLL_VV,   VSLL_VX,   VSLL_VI,
+        VSRL_VV,   VSRL_VX,   VSRL_VI,
+        VSRA_VV,   VSRA_VX,   VSRA_VI,
+        VMINU_VV,  VMINU_VX,
+        VMIN_VV,   VMIN_VX,
+        VMAXU_VV,  VMAXU_VX,
+        VMAX_VV,   VMAX_VX,
+
+        // Narrowing shifts
+        VNSRL_WV,  VNSRL_WX,  VNSRL_WI,
+        VNSRA_WV,  VNSRA_WX,  VNSRA_WI,
+
+        // Scaling shift
+        VSSRL_VV,  VSSRL_VX,  VSSRL_VI,
+        VSSRA_VV,  VSSRA_VX,  VSSRA_VI,
+
+        // Narrowing clip
+        VNCLIPU_WV,  VNCLIPU_WX,  VNCLIPU_WI,
+        VNCLIP_WV,   VNCLIP_WX,   VNCLIP_WI,
+
+        // Saturating
+        VSADDU_VV,  VSADDU_VX,  VSADDU_VI,
+        VSADD_VV,   VSADD_VX,   VSADD_VI,
+        VSSUBU_VV,  VSSUBU_VX,
+        VSSUB_VV,   VSSUB_VX,
+
+        // Carry/borrow (add-with-carry / subtract-with-borrow)
+        VADC_VVM,   VADC_VXM,   VADC_VIM,
+        VMADC_VVM,  VMADC_VXM,  VMADC_VIM,
+        VMADC_VV,   VMADC_VX,   VMADC_VI,    // no mask variant
+        VSBC_VVM,   VSBC_VXM,
+        VMSBC_VVM,  VMSBC_VXM,
+        VMSBC_VV,   VMSBC_VX,                // no mask variant
+
+
+        //  Integer multiply / divide / macc: OPMVV / OPMVX 
+        VMUL_VV,     VMUL_VX,
+        VMULH_VV,    VMULH_VX,
+        VMULHU_VV,   VMULHU_VX,
+        VMULHSU_VV,  VMULHSU_VX,
+        VMACC_VV,    VMACC_VX,
+        VNMSAC_VV,   VNMSAC_VX,
+        VMADD_VV,    VMADD_VX,
+        VNMSUB_VV,  VNMSUB_VX, 
+
+        // Signed fractional multiply
+        VSMUL_VV,  VSMUL_VX,
+
+        // Div / rem 
+        VDIVU_VV,  VDIVU_VX,
+        VDIV_VV,   VDIV_VX,
+        VREMU_VV,  VREMU_VX,
+        VREM_VV,   VREM_VX,
+
+        // Widening integer multiply
+        VWMULU_VV,  VWMULU_VX,
+        VWMUL_VV,   VWMUL_VX,
+        VWMULSU_VV, VWMULSU_VX,
+
+        // Widening integer multiply-add
+        VWMACCU_VV,  VWMACCU_VX,
+        VWMACC_VV,   VWMACC_VX,
+        VWMACCSU_VV, VWMACCSU_VX,
+        VWMACCUS_VX,                   // only VX form exists
+
+        // Widening add/sub (vd/vs2 are 2*SEW)
+        VWADDU_VV, VWADDU_VX, VWADDU_WV, VWADDU_WX,
+        VWADD_VV,  VWADD_VX,  VWADD_WV,  VWADD_WX,
+        VWSUBU_VV, VWSUBU_VX, VWSUBU_WV, VWSUBU_WX,
+        VWSUB_VV,  VWSUB_VX,  VWSUB_WV,  VWSUB_WX,
+
+        // Widening
+        VWREDSUMU_VS,
+        VWREDSUM_VS,
+
+        // Averaging (OPMVV / OPMVX)
+        VAADDU_VV,  VAADDU_VX,
+        VAADD_VV,   VAADD_VX,
+        VASUBU_VV,  VASUBU_VX,
+        VASUB_VV,   VASUB_VX,
+
+        //  Reductions: OPMVV 
+        VMERGE_VVM,  VMERGE_VXM,  VMERGE_VIM,
+        VMV_VV,      VMV_VX,      VMV_VI,     // TODO: All this instructions are actually valid
+
+        VMVNRR_V,                             // TODO: review VMV1R_V, VMV2R_V, VMV4R_V, VMV8R_V, 
         VREDSUM_VS,
-        VID_V
-    } opcode_t;
+        VREDAND_VS,
+        VREDOR_VS,
+        VREDXOR_VS,
+        VREDMINU_VS,
+        VREDMIN_VS,
+        VREDMAXU_VS,
+        VREDMAX_VS,
 
-    typedef struct packed {
-        logic accept;
-        logic writeback;  // TODO depends on dualwrite
-        logic [2:0] register_read;  // TODO Nr read ports
-    } issue_resp_t;
+        // Mask-register logical ops: OPMVV 
+        VMSEQ_VV,   VMSEQ_VX,   VMSEQ_VI,
+        VMSNE_VV,   VMSNE_VX,   VMSNE_VI,
+        VMSLTU_VV,  VMSLTU_VX,
+        VMSLT_VV,   VMSLT_VX,
+        VMSLEU_VV,  VMSLEU_VX,  VMSLEU_VI,
+        VMSLE_VV,   VMSLE_VX,   VMSLE_VI,
+        VMSGTU_VX,  VMSGTU_VI,
+        VMSGT_VX,   VMSGT_VI,
 
-    typedef struct packed {
-        logic [31:0] instr;
-        logic [31:0] mask;
-        issue_resp_t resp;
-        opcode_t     opcode;
-    } copro_issue_resp_t;
 
-    parameter int unsigned NbInstr = 87;     
-    parameter copro_issue_resp_t CoproInstr[NbInstr] = '{
-        '{
-            // Custom Nop
-            instr: 32'b00000_00_00000_00000_0_00_00000_1111011,  // custom3 opcode
-            mask: 32'b11111_11_00000_00000_1_11_00000_1111111,
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b0, 1'b0}},
-            opcode : NOP
-        },
-        '{
-            // vle8.v vd, (rs1)
-            instr: 32'b000_0_00_0_00000_00000_000_00000_0000111,  
-            mask:  32'b111_1_11_0_11111_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VLE8
-        },
-        '{
-            // vle16.v vd, (rs1)
-            instr: 32'b000_0_00_0_00000_00000_101_00000_0000111,  
-            mask:  32'b111_1_11_0_11111_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VLE16
-        },
-        '{
-            // vle32.v vd, (rs1)
-            instr: 32'b000_0_00_0_00000_00000_110_00000_0000111, // template for 32-bit element load
-            mask:  32'b111_1_11_0_11111_00000_111_00000_1111111, // mask relevant fields
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VLE32
-        },
-        '{
-            // vlse8.v vd, (rs1), rs2, vm
-            instr: 32'b000_0_10_0_00000_00000_000_00000_0000111,
-            mask:  32'b111_1_11_0_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VLSE8
-        },
-        '{
-            // vlse16.v vd, (rs1), rs2, vm
-            instr: 32'b000_0_10_0_00000_00000_101_00000_0000111,
-            mask:  32'b111_1_11_0_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VLSE16
-        },        
-        '{
-            // vlse32.v vd, (rs1), rs2, vm
-            instr: 32'b000_0_10_0_00000_00000_110_00000_0000111,
-            mask:  32'b111_1_11_0_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VLSE32
-        },
-        '{
-            // vl1re32.v	v31,(sp)
-            instr: 32'b000_0_00_0_01000_00000_110_00000_0000111,
-            mask:  32'b111_1_11_0_11111_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VL1RE32_V
-        },
-        '{
-            // vse8.v vs3, (rs1), vm 
-            instr: 32'b000_0_00_0_00000_00000_000_00000_0100111,  
-            mask:  32'b111_1_11_0_11111_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSE8
-        },  
-        '{
-            // vse16.v vs3, (rs1), vm 
-            instr: 32'b000_0_00_0_00000_00000_101_00000_0100111,  
-            mask:  32'b111_1_11_0_11111_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSE16
-        },  
-        '{
-            // vse32.v vs3, (rs1)
-            instr: 32'b000_0_00_0_00000_00000_110_00000_0100111,  
-            mask:  32'b111_1_11_0_11111_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSE32
-        },          
-        '{
-            // vs1r.v v3, (a1)
-            instr: 32'b000_0_00_0_01000_00000_000_00000_0100111,  
-            mask:  32'b111_1_11_0_11111_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VS1R_V
-        },
-        '{
-            // vsetvli rd, rs1, vtypei
-            instr: 32'b0_00000000000_00000_111_00000_1010111, 
-            mask:  32'b1_00000000000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b1, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSETVLI
-        },
-        '{
-            // vsetvli rd, rs1, vtypei
-            instr: 32'b11_0000000000_00000_111_00000_1010111,  
-            mask:  32'b11_0000000000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b1, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSETIVLI
-        },
-        '{
-            // vsetvli rd, rs1, vtypei
-            instr: 32'b1_000000_00000_00000_111_00000_1010111, 
-            mask:  32'b1_111111_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b1, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSETVL
-        },
-        '{
-            // csrrs
-            instr: 32'b000000000000_00000_010_00000_1110011, 
-            mask:  32'b000000000000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b1, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : CSRRS
-        },
-        '{
-            //vadd.vv vd, vs2, vs1, vm # Vector-vector
-            instr: 32'b0000000_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VADD_VV
-        },
-        '{
-            //vadd.vv vd, vs2, vs1, vm # Vector-immediate
-            instr: 32'b0000000_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VADD_VI
-        },
-        '{
-            //vadd.vv vd, vs2, vs1, vm # Vector-scalar
-            instr: 32'b0000000_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VADD_VX
-        },
-        '{
-            //vsub.vv vd, vs2, vs1, vm # Vector-vector
-            instr: 32'b0000100_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSUB_VV
-        },
-        '{
-            //vsub.vx vd, vs2, vs1, vm
-            instr: 32'b0000100_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSUB_VX
-        },
-        '{
-            //vrsub.vx vd, vs2, vs1, vm 
-            instr: 32'b0000110_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VRSUB_VX
-        },
-        '{
-            //vrsub.vx vd, vs2, vs1, vm 
-            instr: 32'b0000110_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VRSUB_VI
-        },
-        '{
-            //vand.vv vd, vs2, vs1, vm 
-            instr: 32'b0010010_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VAND_VV
-        },
-        '{
-            //vand.vi vd, vs2, vs1, vm 
-            instr: 32'b0010010_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VAND_VI
-        },
-        '{
-            //vand.vx vd, vs2, vs1, vm 
-            instr: 32'b0010010_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VAND_VX
-        },
-        '{
-            //vor.vv vd, vs2, vs1, vm 
-            instr: 32'b0010100_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VOR_VV
-        },
-        '{
-            //vor.vi vd, vs2, vs1, vm 
-            instr: 32'b0010100_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VOR_VI
-        },
-        '{
-            //vor.vx vd, vs2, vs1, vm 
-            instr: 32'b0010100_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VOR_VX
-        },
-        '{
-            //vxor.vv vd, vs2, vs1, vm 
-            instr: 32'b0010110_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VXOR_VV
-        },
-        '{
-            //vxor.vi vd, vs2, vs1, vm 
-            instr: 32'b0010110_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VXOR_VI
-        },
-        '{
-            //vxor.vx vd, vs2, vs1, vm 
-            instr: 32'b0010110_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VXOR_VX
-        },
-        '{
-            //vsll.vv vd, vs2, vs1, vm
-            instr: 32'b1001010_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSLL_VV
-        },
-        '{
-            //sll.vx vd, vs2, rs1, vm
-            instr: 32'b1001010_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSLL_VX
-        },
-        '{
-            //vsll.vi vd, vs2, uimm, vm 
-            instr: 32'b1001010_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSLL_VI
-        },
-        '{
-            //vsrl.vv vd, vs2, vs1, vm
-            instr: 32'b1010000_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSRL_VV
-        },
-        '{
-            //vsrl.vx vd, vs2, rs1, vm
-            instr: 32'b1010000_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSRL_VX
-        },
-        '{
-            //vsrl.vi vd, vs2, uimm, vm
-            instr: 32'b1010000_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSRL_VI
-        },
-        '{
-            //vsra.vv vd, vs2, vs1, vm
-            instr: 32'b1010010_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSRA_VV
-        },
-        '{
-            //vsra.vx vd, vs2, rs1, vm
-            instr: 32'b1010010_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSRA_VX
-        },
-        '{
-            //vsra.vi vd, vs2, uimm, vm
-            instr: 32'b1010010_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VSRA_VI
-        },
-        '{
-            //vminu.vv vd, vs2, vs1, vm
-            instr: 32'b0001000_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMINU_VV
-        },
-        '{
-            //vminu.vx vd, vs2, rs1, vm
-            instr: 32'b0001000_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMINU_VX
-        },
-        '{
-            //vmin.vv vd, vs2, vs1, vm
-            instr: 32'b0001010_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMIN_VV
-        },
-        '{
-            //vmin.vx vd, vs2, rs1, vm
-            instr: 32'b0001010_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMIN_VX
-        },
-        '{
-            //vmaxu.vv vd, vs2, vs1, vm
-            instr: 32'b0001100_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMAXU_VV
-        },
-        '{
-            //vmaxu.vx vd, vs2, rs1, vm
-            instr: 32'b0001100_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMAXU_VX
-        },
-        '{
-            //vmax.vv vd, vs2, vs1, vm
-            instr: 32'b0001110_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMAX_VV
-        },
-        '{
-            //vmax.vx vd, vs2, rs1, vm
-            instr: 32'b0001110_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMAX_VX
-        },
-        '{
-            //vmseq.vv vd, vs2, vs1, vm 
-            instr: 32'b0110000_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSEQ_VV
-        },
-        '{
-            //vmseq.vx vd, vs2, rs1, vm 
-            instr: 32'b0110000_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSEQ_VX
-        },
-        '{
-            //vmseq.vi vd, vs2, imm, vm
-            instr: 32'b0110000_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSEQ_VI
-        },
-        '{
-            //vmsne.vv vd, vs2, vs1, vm 
-            instr: 32'b0110010_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSNE_VV
-        },
-        '{
-            //vmsne.vx vd, vs2, rs1, vm 
-            instr: 32'b0110010_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSNE_VX
-        },
-        '{
-            //vmsne.vi vd, vs2, imm, vm
-            instr: 32'b0110010_00000_00000_011_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSNE_VI
-        },
-        '{
-            //vmsltu.vv vd, vs2, vs1, vm
-            instr: 32'b0110100_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSLTU_VV
-        },
-        '{
-            //vmsltu.vx vd, vs2, vs1, vm
-            instr: 32'b0110100_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSLTU_VX
-        },
-        '{
-            //vmslt.vv vd, vs2, vs1, vm
-            instr: 32'b0110110_00000_00000_000_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSLT_VV
-        },
-        '{
-            //vmslt.vx vd, vs2, vs1, vm
-            instr: 32'b0110110_00000_00000_100_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMSLT_VX
-        },
-        '{
-            //vmul.vv vd, vs2, vs1, vm
-            instr: 32'b1001010_00000_00000_010_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMUL_VV
-        },
-        '{
-            //vmul.vx vd, vs2, rs1, vm
-            instr: 32'b1001010_00000_00000_110_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMUL_VX
-        },
-        '{
-            //vmulh.vv vd, vs2, vs1, vm 
-            instr: 32'b1001110_00000_00000_010_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMULH_VV
-        },
-        '{
-            //vmulh.vx vd, vs2, rs1, vm 
-            instr: 32'b1001110_00000_00000_110_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMULH_VX
-        },
-        '{
-            //vmulhu.vv vd, vs2, vs1, vm
-            instr: 32'b1001000_00000_00000_010_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMULHU_VV
-        },
-        '{
-            //vmulhu.vx vd, vs2, rs1, vm
-            instr: 32'b1001000_00000_00000_110_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMULHU_VX
-        },
-        '{
-            //vmulhsu.vv vd, vs2, vs1, vm 
-            instr: 32'b1001100_00000_00000_010_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMULHSU_VV
-        },
-        '{
-            //vmulhsu.vx vd, vs2, rs1, vm 
-            instr: 32'b1001100_00000_00000_110_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMULHSU_VX
-        },
-        '{
-            //vmacc.vv vd, vs1, vs2, vm 
-            instr: 32'b1011010_00000_00000_010_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMACC_VV
-        },
-        '{
-            //vmacc.vx vd, rs1, vs2, vm 
-            instr: 32'b1011010_00000_00000_110_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMACC_VX
-        },
-        '{
-            //vnmsac.vv vd, vs1, vs2, vm 
-            instr: 32'b1011110_00000_00000_010_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VNMSAC_VV
-        },
-        '{
-            //vnmsac.vx vd, rs1, vs2, vm 
-            instr: 32'b1011110_00000_00000_110_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VNMSAC_VX
-        },
-        '{
-            //vmadd.vv vd, vs1, vs2, vm 
-            instr: 32'b1010010_00000_00000_010_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMADD_VV
-        },
-        '{
-            //vmadd.vx vd, rs1, vs2, vm 
-            instr: 32'b1010010_00000_00000_110_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMADD_VX
-        },
-        '{
-            //vmerge.vvm vd, vs2, vs1, v0 
-            instr: 32'b0101110_00000_00000_000_00000_1010111, 
-            mask:  32'b1111111_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMERGE_VVM
-        },
-        '{  
-            //vmerge.vxm vd, vs2, rs1, v0
-            instr: 32'b0101110_00000_00000_100_00000_1010111, 
-            mask:  32'b1111111_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMERGE_VXM
-        },
-        '{
-            //vmerge.vim vd, vs2, imm, v0 
-            instr: 32'b0101110_00000_00000_011_00000_1010111, 
-            mask:  32'b1111111_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMERGE_VIM
-        },
-        '{
-            //vmv.v.v vd, vs1
-            instr: 32'b0101111_00000_00000_000_00000_1010111, 
-            mask:  32'b1111111_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV_VV
-        },
-        '{  
-            //vmv.v.x vd, rs1
-            instr: 32'b0101111_00000_00000_100_00000_1010111, 
-            mask:  32'b1111111_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV_VX
-        },
-        '{
-            //vmv.v.i vd
-            instr: 32'b0101111_00000_00000_011_00000_1010111, 
-            mask:  32'b1111111_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV_VI
-        },
-        '{  
-            //vmv.x.s rd, vs2
-            instr: 32'b0100001_00000_00000_010_00000_1010111, 
-            mask:  32'b1111111_00000_11111_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b1, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV_XS
-        },
-        '{  
-            //vmv.s.x vd, rs1
-            instr: 32'b0100001_00000_00000_110_00000_1010111, 
-            mask:  32'b1111111_11111_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV_SX
-        },
-        '{
-            //vmv<nr>r.v vd, vs2
-            instr: 32'b1001111_00000_00000_011_00000_1010111, 
-            mask:  32'b1111111_00000_00111_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV1R_V
-        },
-        '{
-            //vmv<nr>r.v vd, vs2
-            instr: 32'b1001111_00000_00001_011_00000_1010111, 
-            mask:  32'b1111111_00000_00111_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV2R_V
-        },
-        '{
-            //vmv<nr>r.v vd, vs2
-            instr: 32'b1001111_00000_00011_011_00000_1010111, 
-            mask:  32'b1111111_00000_00111_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV4R_V
-        },
-        '{
-            //vmv<nr>r.v vd, vs2
-            instr: 32'b1001111_00000_00111_011_00000_1010111, 
-            mask:  32'b1111111_00000_00111_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VMV8R_V
-        },
-        '{
-            //vredsum.vs vd, vs2, vs1, vm
-            instr: 32'b0000000_00000_00000_010_00000_1010111, 
-            mask:  32'b1111110_00000_00000_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VREDSUM_VS
-        },
-        '{
-            //vid.v vd, vm 
-            instr: 32'b0101000_00000_10001_010_00000_1010111, 
-            mask:  32'b1111110_00000_11111_111_00000_1111111, 
-            resp : '{accept : 1'b1, writeback : 1'b0, register_read : {1'b0, 1'b1,1'b1}},
-            opcode : VID_V
-        }
+        // Mask logical — missing from enum entirely
+        VMANDNOT_MM,
+        VMAND_MM,
+        VMOR_MM,
+        VMXOR_MM,
+        VMORNOT_MM,
+        VMNAND_MM,
+        VMNOR_MM,
+        VMXNOR_MM,
 
-    };
 
-    typedef enum logic [11:0] { 
-        CSR_VSTART = 12'h8,
-        CSR_XSAT   = 12'h9,
-        CSR_VXRM   = 12'hA, 
-        CSR_VCSR   = 12'hF,
-        CSR_VL     = 12'hC20,
-        CSR_VTYPE  = 12'hC21,
-        CSR_VLENB  = 12'hC22
-    } csr_addr_e;
+        // Gather / slide
+        VRGATHER_VV,    VRGATHER_VX,    VRGATHER_VI,
+        VRGATHEREI16_VV,
+        VSLIDEUP_VX,    VSLIDEUP_VI,
+        VSLIDEDOWN_VX,  VSLIDEDOWN_VI,
+        VSLIDE1UP_VX,
+        VSLIDE1DOWN_VX,
 
-    typedef struct packed {
-        logic read_CSR;
-        logic write_CSR;  
-    } csr_handle_t;
+        // vcompress
+        VCOMPRESS_VM,
+
+        // VWXUNARY0 group (funct6=010000, OPMVV) — scalar from vector / mask ops
+        VMV_XS,       
+        VCPOP_M,
+        VFIRST_M,
+        VID_V,
+
+        // VMUNARY0 group (funct6=010100, OPMVV)
+        VMSBF_M,
+        VMSOF_M,
+        VMSIF_M,
+        VIOTA_M,
+
+        // VRXUNARY0 group (funct6=010000, OPMVX) — scalar to vector
+        VMV_SX,
+
+        // VXUNARY0 group (funct6=010010, OPMVX) — zero/sign extend
+        VZEXT_VF2,  VSEXT_VF2,    
+        VZEXT_VF4,  VSEXT_VF4,    
+        VZEXT_VF8,  VSEXT_VF8,    
+
+        //  Vector configuration: OPCFG 
+        VSETVLI,  VSETIVLI,  VSETVL,
+
+        //  Unit-stride loads/stores 
+        VLE8_V,  VLE16_V,   VLE32_V,     
+        VLM_V,
+        VSE8_V,  VSE16_V,   VSE32_V,
+        VSM_V,
+
+        //  Strided loads/stores 
+        VLSE8_V, VLSE16_V, VLSE32_V,
+        VSSE8_V, VSSE16_V, VSSE32_V,
+
+        // Indexed-unordered loads/stores
+        VLUXEI8_V, VLUXEI16_V, VLUXEI32_V,
+        VSUXEI8_V, VSUXEI16_V, VSUXEI32_V,
+
+        // Indexed-ordered loads/stores
+        VLOXEI8_V, VLOXEI16_V, VLOXEI32_V, 
+        VSOXEI8_V, VSOXEI16_V, VSOXEI32_V,
+
+        // Unit-stride fault-only-first
+        VLE8FF_V, VLE16FF_V, VLE32FF_V,
+
+        //  Whole-register loads/stores 
+        VL1RE8_V, VL1RE16_V, VL1RE32_V,
+        VL2RE8_V, VL2RE16_V, VL2RE32_V,
+        VL4RE8_V, VL4RE16_V, VL4RE32_V,
+        VL8RE8_V, VL8RE16_V, VL8RE32_V, 
+        VS1R_V, VS2R_V, VS4R_V, VS8R_V
+    } vec_instr_e;
+
+
+    // Operation performed, independent of operand format.
+    // TODO: adjust listed operations to ones needing ALU only. And not repeated
+    typedef enum logic [6:0] {
+        OP_NONE,
+        //Arithmetic and (bitwise) logic instructions
+        OP_VADD, OP_VSUB, OP_VRSUB,
+        OP_VAND, OP_VOR, OP_VXOR,	 
+        OP_VWADDU, OP_VWADD, OP_VWSUBU, OP_VWSUB,
+    	  OP_VADC, OP_VSBC,
+
+        // Integer add-with-carry and subtract-with-borrow carry-out instructions
+        OP_VMADC, OP_VMSBC, 
+        OP_VMMV, 
+
+        //Shifts instructions
+        OP_VSLL, OP_VSRL, OP_VSRA,
+        OP_VNSRL, OP_VNSRA,
+        
+        //Mul/Mul-add instruction
+        OP_VMUL, OP_VMULH, OP_VMULHU, OP_VMULHSU, 
+        OP_VMACC, OP_VNMSAC, OP_VMADD, OP_VNMSUB,
+
+        // Narrowing clip
+        OP_VNCLIPU, OP_VNCLIP,
+  
+        //Vector Widening Integer Multiply Instructions
+        OP_VWMUL, OP_VWMULU, OP_VWMULSU,	  
+        
+        //Vector Widening Integer Multiply-Add Instructions
+        OP_VWMACCU, OP_VWMACC, OP_VWMACCSU, OP_VWMACCUS,
+        
+        // Averaging
+        OP_VAADDU, OP_VAADD, 
+        OP_VASUBU, OP_VASUB,
+
+        //Div instruction
+        OP_VDIVU, OP_VDIV, OP_VREMU, OP_VREM,	
+        
+        //Min/max instruction
+        OP_VMINU, OP_VMIN, OP_VMAXU, OP_VMAX,
+        
+        //Integer comparison  instructions
+        OP_VMSEQ, OP_VMSNE, OP_VMSLTU, OP_VMSLT, OP_VMSLEU, OP_VMSLE, OP_VMSGTU, OP_VMSGT, 
+        VMSGEU, VMSGE,    //TODO: fix pseudoinstruction
+        
+        //Zero- sign- extend  --> Not necessary, EEW always > SEW   //TODO: necessary?
+        VZEXT, VSEXT,  
+        
+        //Merge and move  instruction      
+        OP_VMV, OP_VMERGE, 	
+
+        // Mask operations
+        OP_VMANDNOT, OP_VMAND, OP_VMOR, OP_VMXOR, OP_VMORNOT, OP_VMNAND, OP_VMNOR, OP_VMXNOR,
+
+        // Saturating 
+        OP_VSADDU, OP_VSADD,
+        OP_VSSUBU, OP_VSSUB,
+        OP_VSSRL, OP_VSSRA,
+
+        // Slide instructions
+        OP_VRGATHER,
+        OP_VRGATHEREI16,
+        OP_VSLIDEUP, OP_VSLIDEDOWN,
+        OP_VSLIDE1UP,  OP_VSLIDE1DOWN,
+        OP_VCOMPRESS,
+
+        // VCSR
+        OP_VCSR,
+
+        //Reduction  //TODO: sure to implement?
+        OP_VREDSUM, OP_VREDAND, OP_VREDOR, OP_VREDXOR,
+        OP_VREDMINU, OP_VREDMIN, OP_VREDMAXU, OP_VREDMAX,
+        OP_VWREDSUM,
+
+        // Load instructions
+        OP_VLE, OP_VLSE, OP_VLXE, OP_VLM, OP_LRE,
+        // Store instructions
+        OP_VSE, OP_VSSE, OP_VSXE, OP_VSM, OP_VSR,
+
+        // Config instruction
+        OP_VCFG,
+
+        // mask population / iota / element-index / first-set //TODO: remove?
+        OP_VCPOP,
+        OP_VFIRST,
+        OP_VMSBF,
+        OP_VMSIF,
+        OP_VMSOF,
+        OP_VIOTA,
+        OP_VID
+
+    } op_e; 
+
+  function automatic op_e instr_to_op(vec_instr_e instr);
+    unique case (instr)
+        // add/sub/widen/carry 
+        VADD_VV, VADD_VX, VADD_VI:                          instr_to_op = OP_VADD;
+        VSUB_VV, VSUB_VX:                                   instr_to_op = OP_VSUB;
+        VRSUB_VX, VRSUB_VI:                                 instr_to_op = OP_VRSUB;
+        VWADDU_VV, VWADDU_VX, VWADDU_WV, VWADDU_WX:         instr_to_op = OP_VWADDU;
+        VWADD_VV,  VWADD_VX,  VWADD_WV,  VWADD_WX:          instr_to_op = OP_VWADD;
+        VWSUBU_VV, VWSUBU_VX, VWSUBU_WV, VWSUBU_WX:         instr_to_op = OP_VWSUBU;
+        VWSUB_VV,  VWSUB_VX,  VWSUB_WV,  VWSUB_WX:          instr_to_op = OP_VWSUB;
+        VADC_VVM, VADC_VXM, VADC_VIM:                       instr_to_op = OP_VADC;
+        VMADC_VVM, VMADC_VXM, VMADC_VIM,
+        VMADC_VV,  VMADC_VX,  VMADC_VI:                     instr_to_op = OP_VMADC;
+        VSBC_VVM, VSBC_VXM:                                 instr_to_op = OP_VSBC;
+        VMSBC_VVM, VMSBC_VXM, VMSBC_VV, VMSBC_VX:           instr_to_op = OP_VMSBC;
+        
+        // logical / shift 
+        VAND_VV, VAND_VX, VAND_VI:                           instr_to_op = OP_VAND;
+        VOR_VV,  VOR_VX,  VOR_VI:                            instr_to_op = OP_VOR;
+        VXOR_VV, VXOR_VX, VXOR_VI:                           instr_to_op = OP_VXOR;
+        VSLL_VV, VSLL_VX, VSLL_VI:                           instr_to_op = OP_VSLL;
+        VSRL_VV, VSRL_VX, VSRL_VI:                           instr_to_op = OP_VSRL;
+        VSRA_VV, VSRA_VX, VSRA_VI:                           instr_to_op = OP_VSRA;
+        VNSRL_WV, VNSRL_WX, VNSRL_WI:                        instr_to_op = OP_VNSRL;
+        VNSRA_WV, VNSRA_WX, VNSRA_WI:                        instr_to_op = OP_VNSRA;
+    
+        // compares 
+        VMSEQ_VV,  VMSEQ_VX,  VMSEQ_VI:                       instr_to_op = OP_VMSEQ;
+        VMSNE_VV,  VMSNE_VX,  VMSNE_VI:                       instr_to_op = OP_VMSNE;
+        VMSLTU_VV, VMSLTU_VX:                                 instr_to_op = OP_VMSLTU;
+        VMSLT_VV,  VMSLT_VX:                                  instr_to_op = OP_VMSLT;
+        VMSLEU_VV, VMSLEU_VX, VMSLEU_VI:                      instr_to_op = OP_VMSLEU;
+        VMSLE_VV,  VMSLE_VX,  VMSLE_VI:                       instr_to_op = OP_VMSLE;
+        VMSGTU_VX, VMSGTU_VI:                                 instr_to_op = OP_VMSGTU;
+        VMSGT_VX,  VMSGT_VI:                                  instr_to_op = OP_VMSGT;
+
+        // min/max 
+        VMINU_VV, VMINU_VX:                                   instr_to_op = OP_VMINU;
+        VMIN_VV,  VMIN_VX:                                    instr_to_op = OP_VMIN;
+        VMAXU_VV, VMAXU_VX:                                   instr_to_op = OP_VMAXU;
+        VMAX_VV,  VMAX_VX:                                    instr_to_op = OP_VMAX;
+    
+        // merge / move
+        VMERGE_VVM, VMERGE_VXM, VMERGE_VIM:                   instr_to_op = OP_VMV;   //TODO: rethink architecture
+        VMV_VV, VMV_VX, VMV_VI:                               instr_to_op = OP_VMV;   //TODO: rethink architecture   
+        VMV_XS:                                               instr_to_op = OP_VMV;   //TODO: rethink architecture
+        VMV_SX:                                               instr_to_op = OP_VMV;   //TODO: rethink architecture
+        VMVNRR_V:                                             instr_to_op = OP_VMV;
+
+      // saturating / averaging / scaling-shift / clip 
+      VSADDU_VV, VSADDU_VX, VSADDU_VI:                      instr_to_op = OP_VSADDU;
+      VSADD_VV,  VSADD_VX,  VSADD_VI:                       instr_to_op = OP_VSADD;
+      VSSUBU_VV, VSSUBU_VX:                                 instr_to_op = OP_VSSUBU;
+      VSSUB_VV,  VSSUB_VX:                                  instr_to_op = OP_VSSUB;
+      VAADDU_VV, VAADDU_VX:                                 instr_to_op = OP_VAADDU;
+      VAADD_VV,  VAADD_VX:                                  instr_to_op = OP_VAADD;
+      VASUBU_VV, VASUBU_VX:                                 instr_to_op = OP_VASUBU;
+      VASUB_VV,  VASUB_VX:                                  instr_to_op = OP_VASUB;
+      VSSRL_VV, VSSRL_VX, VSSRL_VI:                         instr_to_op = OP_VSSRL;
+      VSSRA_VV, VSSRA_VX, VSSRA_VI:                         instr_to_op = OP_VSSRA;
+      VNCLIPU_WV, VNCLIPU_WX, VNCLIPU_WI:                   instr_to_op = OP_VNCLIPU;
+      VNCLIP_WV,  VNCLIP_WX,  VNCLIP_WI:                    instr_to_op = OP_VNCLIP;
+ 
+      // permutation 
+      VRGATHER_VV, VRGATHER_VX, VRGATHER_VI:                instr_to_op = OP_VRGATHER;
+      VRGATHEREI16_VV:                                      instr_to_op = OP_VRGATHEREI16;
+      VSLIDEUP_VX,   VSLIDEUP_VI:                           instr_to_op = OP_VSLIDEUP;
+      VSLIDEDOWN_VX, VSLIDEDOWN_VI:                         instr_to_op = OP_VSLIDEDOWN;
+      VSLIDE1UP_VX:                                         instr_to_op = OP_VSLIDE1UP;
+      VSLIDE1DOWN_VX:                                       instr_to_op = OP_VSLIDE1DOWN;
+      VCOMPRESS_VM:                                         instr_to_op = OP_VCOMPRESS;
+ 
+      // integer multiply / divide / macc
+      VMUL_VV,    VMUL_VX:                                  instr_to_op = OP_VMUL;
+      VMULH_VV,   VMULH_VX:                                 instr_to_op = OP_VMULH;
+      VMULHU_VV,  VMULHU_VX:                                instr_to_op = OP_VMULHU;
+      VMULHSU_VV, VMULHSU_VX:                               instr_to_op = OP_VMULHSU;
+      VDIVU_VV,  VDIVU_VX:                                  instr_to_op = OP_VDIVU;
+      VDIV_VV,   VDIV_VX:                                   instr_to_op = OP_VDIV;
+      VREMU_VV,  VREMU_VX:                                  instr_to_op = OP_VREMU;
+      VREM_VV,   VREM_VX:                                   instr_to_op = OP_VREM;
+      VMACC_VV,  VMACC_VX:                                  instr_to_op = OP_VMACC;
+      VNMSAC_VV, VNMSAC_VX:                                 instr_to_op = OP_VNMSAC;
+      VMADD_VV,  VMADD_VX:                                  instr_to_op = OP_VMADD;
+      VNMSUB_VV, VNMSUB_VX:                                 instr_to_op = OP_VNMSUB;
+ 
+      // widening multiply / macc 
+      VWMULU_VV, VWMULU_VX:                                 instr_to_op = OP_VWMULU;
+      VWMUL_VV,  VWMUL_VX:                                  instr_to_op = OP_VWMUL;
+      VWMULSU_VV, VWMULSU_VX:                               instr_to_op = OP_VWMULSU;
+      VWMACCU_VV, VWMACCU_VX:                               instr_to_op = OP_VWMACCU;
+      VWMACC_VV,  VWMACC_VX:                                instr_to_op = OP_VWMACC;
+      VWMACCSU_VV, VWMACCSU_VX:                             instr_to_op = OP_VWMACCSU;
+      VWMACCUS_VX:                                          instr_to_op = OP_VWMACCUS;
+ 
+      // reductions 
+      VREDSUM_VS:                                           instr_to_op = OP_VREDSUM;
+      VREDAND_VS:                                          instr_to_op = OP_VREDAND;
+      VREDOR_VS:                                           instr_to_op = OP_VREDOR;
+      VREDXOR_VS:                                          instr_to_op = OP_VREDXOR;
+      VREDMINU_VS:                                         instr_to_op = OP_VREDMINU;
+      VREDMIN_VS:                                          instr_to_op = OP_VREDMIN;
+      VREDMAXU_VS:                                         instr_to_op = OP_VREDMAXU;
+      VREDMAX_VS:                                          instr_to_op = OP_VREDMAX;
+      VWREDSUMU_VS:                                        instr_to_op = OP_VWREDSUM;
+      VWREDSUM_VS:                                         instr_to_op = OP_VWREDSUM;
+ 
+      // mask-register logical 
+      VMAND_MM:     instr_to_op = OP_VMAND;
+      VMNAND_MM:    instr_to_op = OP_VMNAND;
+      VMANDNOT_MM:  instr_to_op = OP_VMANDNOT;
+      VMOR_MM:      instr_to_op = OP_VMOR;
+      VMNOR_MM:     instr_to_op = OP_VMNOR;
+      VMORNOT_MM:   instr_to_op = OP_VMORNOT;
+      VMXOR_MM:     instr_to_op = OP_VMXOR;
+      VMXNOR_MM:    instr_to_op = OP_VMXNOR;
+ 
+      // mask population / iota / element-index / first-set
+      VCPOP_M:  instr_to_op = OP_VCPOP;
+      VFIRST_M: instr_to_op = OP_VFIRST;
+      VMSBF_M:  instr_to_op = OP_VMSBF;
+      VMSIF_M:  instr_to_op = OP_VMSIF;
+      VMSOF_M:  instr_to_op = OP_VMSOF;
+      VIOTA_M:  instr_to_op = OP_VIOTA;
+      VID_V:    instr_to_op = OP_VID;
+
+      // configuration 
+      VSETVLI, VSETIVLI, VSETVL:                          instr_to_op = OP_VCFG;
+
+      // loads    //TODO: necessary specific?
+      VLE8_V, VLE16_V, VLE32_V:                           instr_to_op = OP_VLE;
+      VLSE8_V, VLSE16_V, VLSE32_V:                        instr_to_op = OP_VLSE; 
+      VLUXEI8_V, VLUXEI16_V, VLUXEI32_V,                  
+      VLOXEI8_V, VLOXEI16_V, VLOXEI32_V:                  instr_to_op = OP_VLXE; 
+      VLM_V:                                              instr_to_op = OP_VLM;
+      VL1RE8_V, VL1RE16_V, VL1RE32_V,
+      VL2RE8_V, VL2RE16_V, VL2RE32_V,
+      VL4RE8_V, VL4RE16_V, VL4RE32_V,
+      VL8RE8_V, VL8RE16_V, VL8RE32_V:                     instr_to_op = OP_LRE;
+
+      // stores 
+      VSE8_V, VSE16_V, VSE32_V:                           instr_to_op = OP_VSE; 
+      VSSE8_V, VSSE16_V, VSSE32_V:                        instr_to_op = OP_VSSE;
+      VSUXEI8_V, VSUXEI16_V, VSUXEI32_V,
+      VSOXEI8_V, VSOXEI16_V, VSOXEI32_V:                  instr_to_op = OP_VSXE;
+      VSM_V:                                              instr_to_op = OP_VSM;
+      VS1R_V, VS2R_V, VS4R_V, VS8R_V:                     instr_to_op = OP_VSR;
+  
+      default: instr_to_op = OP_NONE; 
+    endcase
+
+  endfunction
 
 endpackage 
     

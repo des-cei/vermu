@@ -6,44 +6,49 @@
 // [STATIC] --> design-time
 // [FIXED]  --> defined by specification
 // [DYNAMIC]--> by user
+//
+// TODO: template for generic use cases.
 
 package vpu_pkg;
 
     import rvv_instr_pkg::*;
-    import vector_ops_pkg::*;
+    // import vector_ops_pkg::*;
 
     ////////////////
     // Parameters //
     ////////////////
                
     localparam int unsigned XLEN = 32;  //[FIXED]
-    typedef logic [XLEN-1:0] xlen_t;    
+    // typedef logic [XLEN-1:0] xlen_t;    
     
-    // Maximum size of a single vector element in bits (ELEN ≥ 8)[FIXED]
-    localparam int unsigned ELEN   = 32;       
+    // // Maximum size of a single vector element in bits (ELEN ≥ 8)[FIXED]
+    // localparam int unsigned ELEN = 32;       
 
-    typedef logic [31:0] elen_t;    
+    // typedef logic [31:0] elen_t;    
     
-    // Number of bits in a vector register (in each of 32 registers). Min 32. [STATIC]
-    localparam int unsigned VLEN   = 128;	             
+    // // Number of bits in a vector register (in each of 32 registers). Min 32. [STATIC]
+    // localparam int unsigned VLEN = 128;	             
     
-    typedef logic [VLEN-1:0] vlen_t;                    
+    // typedef logic [VLEN-1:0] vlen_t;                    
 
-    localparam int unsigned VLENB  = VLEN / 8; 
+    // localparam int unsigned VLENB = VLEN / 8; 
                    
-    // Selected element width [DYNAMIC]
-    localparam int unsigned SEW = 32; 	
+    // // Selected element width [DYNAMIC]
+    // localparam int unsigned SEW = 32; 	
 
-    // Number of vector registers (RV32I) [FIXED]
-    localparam int unsigned NRVREG = 32;
+    // // Number of vector registers (RV32I) [FIXED]
+    // localparam int unsigned NRVREG = 32;
 
-    typedef logic [$clog2(NRVREG)-1:0] vreg_t;
-    typedef logic[$clog2(NRVREG)-1:0] addr_t;
+    // typedef logic [$clog2(NRVREG)-1:0] vreg_t;
+    // typedef logic[$clog2(NRVREG)-1:0] addr_t;
 	
-    // Maximum vector length in elements 
-    localparam int unsigned MAXVL  = VLEN / 8; 
+    // // Maximum vector length in elements 
+    // localparam int unsigned MAXVL  = VLEN / 8; 
 
-    typedef logic [$clog2(MAXVL+1)-1:0] vl_t;      
+    // typedef logic [$clog2(MAXVL+1)-1:0] vl_t;      
+
+    // Core-V Extension Interface param
+    localparam int unsigned NrRgprPorts = 2;
 
     //////////////////
     //  Definitions //
@@ -54,7 +59,7 @@ package vpu_pkg;
         SEW_8  = 3'b000,
         SEW_16 = 3'b001,
         SEW_32 = 3'b010
-    } vsew_e;
+    } sew_e;
 
     typedef enum logic [2:0] {
         LMUL_F4 = 3'b110,
@@ -63,179 +68,85 @@ package vpu_pkg;
         LMUL_2  = 3'b001,
         LMUL_4  = 3'b010,
         LMUL_8  = 3'b011
-    } vlmul_e;
+    } lmul_e;
 
+    // Source formats
     typedef enum logic [6:0] {   
-        load_fp  = 7'b0000111,    
-        store_fp = 7'b0100111,    
-        op_v     = 7'b1010111,    
-        system   = 7'b1110011     
+        OPCODE_LOAD  = 7'h7,             
+        OPCODE_STORE = 7'h27,            
+        OPCODE_OP_V  = 7'h57             
+        //system   = 7'b1110011     
     } major_opcode_e;
     
-    //Operand type and source locations
-    typedef enum logic [3:0] {
-        OPIVV        = 4'b0000, 
-        OPFVV_CSRRW  = 4'b0001, //--N/A
-        OPMVV_CSRRS  = 4'b0010, 
-        OPIVI_CSRRC  = 4'b0011, //imm[4:0]
-        OPIVX        = 4'b0100, //GPR x, rs1
-        OPFVF_CSRRWI = 4'b0101, //--N/A
-        OPMVX_CSRRSI = 4'b0110, //GPR x, rs1
-        OPCFG_CSRRCI = 4'b0111, //GPR x, rs1 & rs2/imm. 311p. Format under OP-V opcode? vsetvli, vsetvl
-        NOP_FUNCT3   = 4'b1000
-    } encode_funct3_e;
-
+    //Operand type for OP-V instructions and operand-format 
     typedef enum logic [2:0] {
-        W_8  = 3'b000,
-        W_16 = 3'b101,
-        W_32 = 3'b110
-    } width_e;
-    
-    ////////////
-    //  CSRs  //
-    ////////////
-
-    typedef logic [XLEN-1:0] vstart_t;
-    
-    // typedef enum logic [1:0] {
-    //     RNU = 2'b00,
-    //     RNE = 2'b01,
-    //     RDN = 2'b10,
-    //     ROD = 2'b11
-    // } vxrm_e;
-
-    // typedef struct packed {
-    //     vxrm_e vxrm;
-    //     logic  vxsat;
-    // } vcsr_t;
+        FMT_OPIVV        = 3'b000, 
+        FMT_OPFVV_CSRRW  = 3'b001,     //--N/A
+        FMT_OPMVV_CSRRS  = 3'b010,     
+        FMT_OPIVI_CSRRC  = 3'b011,     //imm[4:0]
+        FMT_OPIVX        = 3'b100,     //GPR x, rs1
+        FMT_OPFVF_CSRRWI = 3'b101,     //--N/A
+        FMT_OPMVX_CSRRSI = 3'b110,     //GPR x, rs1
+        FMT_OPCFG_CSRRCI = 3'b111      //GPR x, rs1 & rs2/imm. 311p. Format under OP-V opcode? vsetvli, vsetvl
+    } vec_funct3_e;
     
     typedef struct packed {
-        logic   vill;
-        logic   vma;
-        logic   vta;
-        vsew_e  vsew;
-        vlmul_e vlmul;
-    } vtype_t;
+        vec_instr_e                         instr_enum;
+        logic [31:0]                        instr;
+        logic [NrRgprPorts-1:0][XLEN-1:0]   registers;
+        logic                               writeback;
+    } buff_dec_t;
 
     typedef struct packed {
-        opcode_t        opcode;
-        major_opcode_e  mopcode; 
-        encode_funct3_e funct3;
-        
-        
-        addr_t          vd;
-        addr_t          vs1;
-        addr_t          vs2;
+        vec_instr_e    instr_enum;
+        // logic          valid;
+        // logic          illegal;
 
-        elen_t          rd;
-        elen_t          rs1;
-        elen_t          rs2;        
+        major_opcode_e major_opcode;
+        vec_funct3_e   fmt;       // OP-V funct3 field; meaningful when opcode==OPCODE_OP_V
+        logic [5:0]    funct6;
 
-        logic           vm;
-        logic [5:0]     funct6;
+        // register fields 
+        logic [4:0]    vd;           // also rd for scalar dest (vsetvl*)
+        logic [4:0]    vs1;          // also rs1 for *VX/*VF and rs1 for vset*
+        logic [4:0]    vs2;          // also rs2 for vsetvl
+        logic [4:0]    vs3;          // store-data register (same bit position as vd)
+        logic [4:0]    imm5;         // OPIVI immediate (sign-extend at execute if needed)
+        logic [XLEN-1:0] rs1_data;
+        logic [XLEN-1:0] rs2_data;
+        // logic [10:0]   zimm11;    // vsetvli immediate
+        // logic [9:0]    zimm10;    // vsetivli immediate
+        // logic [4:0]    avl_uimm;  // vsetivli AVL (5-bit unsigned immediate)
+        logic          vm;        // vector mask-enable bit
 
-        //Load/Store
-        width_e         width;
-        addr_t          lumop;
-        logic [1:0]     mop;
-        logic           mew;
-        logic [2:0]     nf;
+        // memory-only fields (meaningful when opcode is LOAD_FP/STORE_FP)
+        // logic [2:0]    width;     // EEW encoding for loads/stores
+        // logic [2:0]    nf;        // number of fields (segments)
+        // logic          mew;
+        // logic [1:0]    mop;       // addressing mode: 00 unit-stride, 10 strided,
+        //                           //                   01 indexed-unordered, 11 indexed-ordered
+        // logic [4:0]    umop;      // lumop / sumop
 
-        //CSRS config
-        vtype_t csr_vtype;
+        // category flags -- consumers branch on these, never on raw opcode bits
+        logic          is_arith;
+        logic          is_load;
+        logic          is_store;
+        // logic          is_config;
+        // logic          is_mask_logic;
+        // logic          is_reduction;
+        // logic          is_widening;
+        logic             is_narrowing;
+        // logic          is_signed;
 
-        vlen_t rs_rdata1;
-        logic  use_data1;
-        logic  use_data2;
-        logic  is_signed;
-        logic  is_vmv_nr;
-        logic  is_writeback;
-    } vpu_req_t;
+        // operand-presence flags -- tell the register-read stage what to fetch
+        // logic          uses_vs1;
+        // logic          uses_vs2;
+        // logic          uses_vd_src;     // vd/vs3 also read (macc-style, store data)
+        // logic          uses_rs1_scalar;
+        // logic          uses_rs2_scalar;
+        // logic          uses_imm;
+    } vec_decoded_t;
 
-
-    typedef enum logic {
-        S_IDLE, 
-        S_BUSY
-    } xif_fsm_e;
-
-    typedef struct packed {
-        logic sew8;
-        logic sew16;
-        logic sew32;  
-    } operation_valid_t;
-
-    typedef struct packed {
-        logic[7:0]  e8;
-        logic[15:0] e16;
-        logic[31:0] e32;  
-    } red_acc_t;
-
-    /////////////////////
-    // Functionalities //
-    /////////////////////
-
-    function automatic int get_sew_bits(input vsew_e SEW);
-        case (SEW)
-            SEW_8:  return 8;
-            SEW_16: return 16;
-            SEW_32: return 32;
-            default: return 32;
-        endcase
-    endfunction
-
-    function automatic int get_eew_bits(input width_e WIDTH);
-        unique case (WIDTH)
-            W_8:  return 8;
-            W_16: return 16;
-            W_32: return 32;
-            default: return 32;
-        endcase
-    endfunction
-
-    function automatic int get_lane_limit(input vsew_e SEW, input int unsigned vl);
-        case (SEW)
-            SEW_8: begin
-                if      (vl <= 4)  return 1;
-                else if (vl <= 8)  return 2;
-                else if (vl <= 12) return 3;
-                else               return 4;
-            end
-            SEW_16: begin
-                if      (vl <= 2)  return 1;
-                else if (vl <= 4)  return 2;
-                else if (vl <= 6)  return 3;
-                else               return 4;
-            end
-            default: begin 
-                if (vl <= 1)       return 1;
-                else if (vl <= 2)  return 2;
-                else if (vl <= 3)  return 3;
-                else               return 4;
-            end
-        endcase
-    endfunction
-
-    function automatic int int_lmul(input vlmul_e vlmul, input logic vtype_supported);
-        unique case (vlmul) 
-        LMUL_F4: int_lmul = 1;   // 1/4 LMUL
-        LMUL_F2: int_lmul = 2;   // 1/2 LMUL
-        LMUL_1:  int_lmul = 4;   // 1 LMUL
-        default: begin 
-            vtype_supported = 1'b0;
-            int_lmul = 0;
-        end
-        endcase
-    endfunction
-    
-    function automatic int get_nreg(input opcode_t op);
-        unique case (op)
-            VMV1R_V: get_nreg = 1;
-            VMV2R_V: get_nreg = 2;
-            VMV4R_V: get_nreg = 4;
-            VMV8R_V: get_nreg = 8;
-            default: get_nreg = 0;
-        endcase
-    endfunction
 
 
 

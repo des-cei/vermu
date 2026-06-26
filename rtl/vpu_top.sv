@@ -52,28 +52,104 @@ module vpu_top
   x_issue_req_t  issue_req;
   x_issue_resp_t issue_resp;
   logic issue_valid, issue_ready;
-
+  
   // Register interface signals   
   x_register_t register;
   logic register_valid;
 
-  // Decoder and alu signals
-  registers_t registers;
-  hartid_t issue_hartid;
-  id_t issue_id;
-  logic [XLEN-1:0] csr_result;
-  logic         we;
+  // Commit interface signals //TODO: assignment
+  x_commit_t commit;
+  logic commit_valid;
+
+  //Result interface
+  x_result_t result;
+  logic result_valid, result_ready;
 
   // Issue and Register interface
   assign x_issue_ready_o      = issue_ready; 
   assign x_issue_resp_o       = issue_resp;
   assign x_register_ready_o   = x_issue_ready_o;
+  assign x_result_o           = result;
+  assign x_result_valid_o     = result_valid;
 
   assign issue_req            = x_issue_req_i;
   assign issue_valid          = x_issue_valid_i;
   assign register             = x_register_i;
   assign register_valid       = x_register_valid_i;
+  assign commit               = x_commit_i;
+  assign commit_valid         = x_commit_valid_i;
+  assign result_ready         = x_result_ready_i;
 
+  /////////////////////
+  // Issue Interface //
+  /////////////////////
+  //TODO
+  always_comb begin: issue_interface
+    issue_ready              = (!buff_full) 1'b1 : 1'b0;
+    issue_resp.accept        = '0;  //dec
+    issue_resp.writeback     = '0;  //dec
+    issue_resp.register_read = '0;  //dec
+  end
+  
+  ////////////////////////
+  // Register Interface //
+  ////////////////////////
+
+  always_comb begin: register_interface
+  
+  end
+
+  //////////////////////
+  // Commit Interface //
+  //////////////////////
+
+  always_comb begin: commit_interface
+  
+  end
+
+  //////////////////////
+  // Result Interface //
+  //////////////////////
+
+  always_comb begin: result_interface
+    result_valid  = result_valid;   
+    result.hartid = result.hartid;   
+    result.id     = result.id;
+    result.data   = result.data;
+    result.rd     = result.rd;
+    result.we     = result.we; 
+  end
+
+
+  ///////////////
+  // VERMU 2.0 //
+  ///////////////
+
+  vpu_control_unit #(
+    .NrRgprPorts      (NrRgprPorts),
+    .readregflags_t   (readregflags_t),
+    .writeregflags_t  (writeregflags_t),
+    .id_t             (id_t),
+    .hartid_t         (hartid_t),
+    .x_issue_req_t    (x_issue_req_t),
+    .x_issue_resp_t   (x_issue_resp_t),
+    .x_register_t     (x_register_t),
+    .x_commit_t       (x_commit_t),
+    .x_result_t       (x_result_t),
+    .registers_t      (registers_t)
+  ) i_vpu_control_unit (
+    .issue_valid_i     (issue_valid),
+    .issue_ready_o     (issue_ready),
+    .issue_req_i       (issue_req),
+    .issue_resp_o      (issue_resp),
+    .register_valid_i  (register_valid),
+    .register_i        (register),
+    .commit_valid_i    (commit_valid),
+    .commit_i          (commit),
+    .result_valid_o    (result_valid),
+    .result_ready_i    (result_ready),
+    .result_o          (result)  //TODO: ? 
+  )
 /////// User ////////////
 
   logic  instr_vrf_we, op_valid_ls, op_valid_simd, done_w, done_r2,
@@ -116,9 +192,9 @@ module vpu_top
       logic simd_result_valid;
   endinterface
 
-////////////////////////
+///////// Modules ///////////////
 
-  instr_decoder #(
+  vpu_decoder #(
       .copro_issue_resp_t(rvv_instr_pkg::copro_issue_resp_t),
       .opcode_t          (rvv_instr_pkg::opcode_t),
       .NbInstr           (rvv_instr_pkg::NbInstr),
@@ -130,7 +206,7 @@ module vpu_top
       .x_issue_resp_t    (x_issue_resp_t),
       .x_register_t      (x_register_t),
       .registers_t       (registers_t)
-  ) instr_decoder_i (
+  ) vpu_decoder_i (
       .clk_i               (clk_i),
       .rst_ni              (rst_ni),
       .issue_valid_i       (issue_valid),
@@ -228,9 +304,9 @@ module vpu_top
         .result_valid_o   (simd_result_valid)
     );
 
-  ////////////////////
-  // CVXIF RESPONSE //
-  ////////////////////
+////////////////////
+// CVXIF RESPONSE //
+////////////////////
 
   always_comb begin
     x_result_valid_o  = result_valid; 
@@ -264,7 +340,7 @@ module vpu_top
     
   end
 
-  ///////// User  /////////////
+///////// User  /////////////
 
   assign raddr1 = (vpu_req.mopcode == op_v) ? 
                   ((vpu_req.funct3 == OPIVV || vpu_req.funct3 == OPMVV_CSRRS) ? vpu_req.vs1 : vpu_req.rs1) : '0;                                                         

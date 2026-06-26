@@ -17,7 +17,10 @@ filesets:
       - rtl/simd_controller.sv
       - rtl/VAU_lanes.sv
       - rtl/VAU.sv
+      - rtl/vpu_control_unit.sv
+      - rtl/vpu_decoder.sv
       - rtl/vpu_top.sv
+      - rtl/vpu_xif_decoder.sv
       - rtl/vregfile.sv
       - rtl/include/utils_macros.svh: {is_include_file: true}
     file_type: systemVerilogSource

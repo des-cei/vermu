@@ -33,5 +33,5 @@ cp tb/env.template.sh tb/env.sh
 source tb/env.sh
 make build-sim
 make run-vpu-unit-test
-make run-vpu-unit-gui
+make run-questa-tb
 ```

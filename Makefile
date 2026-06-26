@@ -33,9 +33,10 @@ endif
 # Build configuration
 ########################################
 PROJECT_DIR := sw/$(PROJECT)
-SRC := $(PROJECT_DIR)/main.c
+# Try to find source in PROJECT_DIR/main.c first, then sw/tb/PROJECT.c
+SRC := $(or $(wildcard $(PROJECT_DIR)/main.c), sw/tb/$(PROJECT).c)
 OBJ := sw/build/main.o
-WAVE_DO := tb/wave_automatize.do
+WAVE_DO := tb/wave.do
 MARCH := rv32imc_zve32x_zvl128b
 MABI := ilp32
 CFLAGS := -O2 -march=$(MARCH) -mabi=$(MABI) -I$(PROJECT_DIR)
@@ -48,7 +49,9 @@ RTL_PKG_FILES := \
 	rtl/include/vpu_pkg.sv
 
 RTL_FILES := \
-	rtl/instr_decoder.sv \
+	rtl/vpu_xif_decoder.sv \
+	rtl/vpu_decoder.sv \
+	rtl/vpu_control_unit.sv \
 	rtl/load_store_unit_mis.sv \
 	rtl/obi_lsu_top.sv \
 	rtl/simd_controller.sv \
@@ -57,14 +60,19 @@ RTL_FILES := \
 	rtl/vregfile.sv \
 	rtl/vpu_top.sv
 
+#TODO: remove tb files?
 TB_FILES := \
+    tb/tb_xif_decoder.sv \
 	tb/vpu_stimulus_gen.sv \
 	tb/vpu_pipeline_checker.sv \
 	tb/tb_vpu_top.sv
 
+SIM_FILES ?= -all
+	
+
 SV_INC_DIRS := +incdir+$(CURDIR)/rtl/include +incdir+$(CURDIR)/tb
 
-.PHONY: all help check-tools build-sw build-sim run-vpu-unit-test run-vpu-unit-gui
+.PHONY: all help check-tools build-sw build-sim run-vpu-unit-test run-vpu-unit-gui run-questa-tb run-questa-tb-gui
 
 all: run-vpu-unit-test
 
@@ -74,11 +82,22 @@ help:
 	@echo "  build-sim           Build local Questa simulation workspace"
 	@echo "  run-vpu-unit-test   Run VPU unit test in CLI"
 	@echo "  run-vpu-unit-gui    Run VPU unit test in GUI"
+	@echo "  run-questa-tb       Run an arbitrary tb_<name> in CLI"
+	@echo "  run-questa-tb-gui   Run an arbitrary tb_<name> in GUI"
 	@echo "Variables:"
 	@echo "  PROJECT=<name>      Software project under sw/"
+	@echo "  SIM_FILES=<list>    Files to compile in build-sim, or -all"
+	@echo "  TB_TOP=<module>     Top module to simulate with run-questa-tb"
 	@echo "  QUESTA_LICENSE=<lic> Optional, only if you want to force a license file"
 
 check-tools:
+	@echo "Checking tools and their resolved paths:"
+	@echo "  PYTHON: $(PYTHON) -> $$(command -v $(PYTHON) 2>/dev/null || echo not-found)"
+	@echo "  vsim: $$(command -v vsim 2>/dev/null || echo not-found)"
+	@echo "  $(QUESTA_VLIB): $$(command -v $(QUESTA_VLIB) 2>/dev/null || echo not-found)"
+	@echo "  $(QUESTA_VLOG): $$(command -v $(QUESTA_VLOG) 2>/dev/null || echo not-found)"
+	@echo "  $(RISCV_GCC): $$(command -v $(RISCV_GCC) 2>/dev/null || echo not-found)"
+	@echo "  $(RISCV_OBJDUMP): $$(command -v $(RISCV_OBJDUMP) 2>/dev/null || echo not-found)"
 	@command -v $(PYTHON) >/dev/null || (echo "Error: $(PYTHON) not found"; exit 1)
 	@command -v vsim >/dev/null || (echo "Error: vsim not found"; exit 1)
 	@command -v $(QUESTA_VLIB) >/dev/null || (echo "Error: $(QUESTA_VLIB) not found"; exit 1)
@@ -87,6 +106,7 @@ check-tools:
 	@command -v $(RISCV_OBJDUMP) >/dev/null || (echo "Error: $(RISCV_OBJDUMP) not found"; exit 1)
 
 build-sw:
+	@echo "--> Building sw..."
 	@test -f $(SRC) || (echo "Error: source file not found: $(SRC)"; exit 1)
 	@mkdir -p sw/build
 	$(RISCV_GCC) $(CFLAGS) -c $(SRC) -o $(OBJ)
@@ -94,10 +114,14 @@ build-sw:
 
 build-sim: check-tools
 	@mkdir -p $(SIM_DIR)
+	@test -f $(SRC) || (echo "Error: source file not found: $(SRC)"; exit 1)
+	@mkdir -p sw/build
+	$(RISCV_GCC) $(CFLAGS) -c $(SRC) -o $(OBJ)
+	$(RISCV_OBJDUMP) -d $(OBJ) > $(ASM)
 	cd $(SIM_DIR) && [ -d work ] || $(QUESTA_VLIB) work
-	cd $(SIM_DIR) && $(QUESTA_VLOG) -sv $(SV_INC_DIRS) $(addprefix $(CURDIR)/,$(RTL_PKG_FILES) $(RTL_FILES) $(TB_FILES))
+	cd $(SIM_DIR) && $(if $(filter -all,$(SIM_FILES)),$(QUESTA_VLOG) -sv $(SV_INC_DIRS) $(addprefix $(CURDIR)/,$(RTL_PKG_FILES) $(RTL_FILES) $(TB_FILES)),$(QUESTA_VLOG) -sv $(SV_INC_DIRS) $(addprefix $(CURDIR)/,$(SIM_FILES)))
 
-run-vpu-unit-test: check-tools
+run-vpu-unit: check-tools
 	@echo "--> Compiling software..."
 	$(MAKE) build-sw PROJECT=$(PROJECT)
 	@echo "--> Building local simulation workspace..."
@@ -116,5 +140,21 @@ run-vpu-unit-gui: check-tools
 	$(PYTHON) tb/gen_stimulus.py $(ASM) $(STIM)
 	@echo "--> Launching Questasim GUI..."
 	cd $(SIM_DIR) && $(VSIM_ENV) vsim -voptargs="+acc" work.tb_vpu_top +stimulus_path=$(CURDIR)/$(STIM) -do $(CURDIR)/$(WAVE_DO)
+
+run-questa-tb: check-tools
+	@echo "--> Building local simulation workspace..."
+	$(MAKE) build-sim
+	@echo "--> Generating stimulus..."
+	$(PYTHON) tb/gen_stimulus.py $(ASM) $(STIM)
+	@echo "--> Running Questasim testbench $(TB_TOP)..."
+	cd $(SIM_DIR) && $(VSIM_ENV) vsim -c -do "run -all; quit" $(TB_TOP) +stimulus_path=$(CURDIR)/$(STIM)
+
+run-questa-tb-gui: check-tools
+	@echo "--> Building local simulation workspace..."
+	$(MAKE) build-sim
+	@echo "--> Generating stimulus..."
+	$(PYTHON) tb/gen_stimulus.py $(ASM) $(STIM)
+	@echo "--> Launching Questasim testbench $(TB_TOP) in GUI..."
+	cd $(SIM_DIR) && $(VSIM_ENV) vsim -voptargs="+acc" work.$(TB_TOP) +stimulus_path=$(CURDIR)/$(STIM) -do $(CURDIR)/$(WAVE_DO)
 
 		
