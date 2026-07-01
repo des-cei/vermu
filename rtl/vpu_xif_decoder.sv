@@ -20,7 +20,6 @@ import vpu_pkg::*;
 )(
     input  logic          issue_valid_i,
     input  logic [31:0]   instr_i,
-    output logic          issue_ready_o,
     output logic          accept_o,         // Instruction recognized by VPU
     output logic          writeback_o,      
     output readregflags_t register_read_o, 
@@ -561,8 +560,6 @@ import vpu_pkg::*;
             default: ; 
         endcase
     end: vproc_decoder
-  
-    assign issue_ready_o = issue_valid_i; // Todo: in case of VCF too?
-  
+    
 endmodule: vpu_xif_decoder
   

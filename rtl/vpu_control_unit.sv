@@ -31,17 +31,17 @@ module vpu_control_unit
     localparam type         registers_t         = logic [NrRgprPorts-1:0][XLEN-1:0]
 )(
     // CVXIF Interface  //TODO: Not sure all this XIF assigned here
-    input  logic              issue_valid_i,
-		output logic              issue_ready_o,
-		input  x_issue_req_t      issue_req_i,
-		output x_issue_resp_t     issue_resp_o,
-    input  logic              register_valid_i,
-		input  x_register_t       register_i,
-		input  logic              commit_valid_i,
-		input  x_commit_t         commit_i,
-		output logic              result_valid_o,
-		input  logic              result_ready_i,
-		output x_result_t         result_o,
+    input  logic              x_issue_valid_i,
+		output logic              x_issue_ready_o,
+		input  x_issue_req_t      x_issue_req_i,
+		output x_issue_resp_t     x_issue_resp_o,
+    input  logic              x_register_valid_i,
+		input  x_register_t       x_register_i,
+		input  logic              x_commit_valid_i,
+		input  x_commit_t         x_commit_i,
+		output logic              x_result_valid_o,
+		input  logic              x_result_ready_i,
+		output x_result_t         x_result_o,
 );
 
 
@@ -53,22 +53,28 @@ module vpu_control_unit
     .readregflags_t (readregflags_t),
     .vec_instr_e    (vec_instr_e)
   ) i_vpu_xif_decoder (
-    .instr_i          (x_issue_req_i.instr),
-    .accept_o         (accept),     
-    .writeback_o      (writeback),
-    .register_read_o  (register_read),
-    .vec_instr_o      (buff_dec.instr_enum) 
-  );
+    .issue_valid_i  (x_issue_valid_i),
+    .instr_i        (x_issue_req_i.instr),
+    .accept_o       (accept),
+    .writeback_o    (writeback),
+    .register_read_o(register_read),
+    .vec_instr_o    (buff_dec.instr_enum)
+    );
 
   // CV-X-IF response
+  assign x_issue_ready_o              = !full_buffer;   // TODO: acceptance of new  instruction request. 
   assign x_issue_resp_o.writeback     = writeback;
   assign x_issue_resp_o.accept        = accept;       // TODO: should check illegality before accept (CSRs)
   assign x_issue_resp_o.register_read = register_read
 
-  // Decoded context to buffer
-  assign buff_dec.writeback       = writeback;  //?
+  assign x_result_valid_o = ;
+  assign x_result_o       = ;
+  //result_ready_i for ...
 
-  always_comb begin: extract_rs_data
+  // Decoded context to buffer
+  assign buff_dec.writeback       = writeback;  
+
+  always_comb begin: extract_rs_data                            // TODO: check register read before extraction. Condition in accept?
     if (register_read  = 2'b1) buff_dec.rs[0] = register_i[0];
     else if (register_read  = 2'b3) buff_dec.rs = register_i;
     else buff_dec = '0;

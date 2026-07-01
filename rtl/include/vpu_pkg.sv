@@ -101,10 +101,12 @@ package vpu_pkg;
         vec_instr_e    instr_enum;
         // logic          valid;
         // logic          illegal;
+        logic           writeback;
 
         major_opcode_e major_opcode;
         vec_funct3_e   fmt;       // OP-V funct3 field; meaningful when opcode==OPCODE_OP_V
         logic [5:0]    funct6;
+        op_e           operation;
 
         // register fields 
         logic [4:0]    vd;           // also rd for scalar dest (vsetvl*)
@@ -120,12 +122,11 @@ package vpu_pkg;
         logic          vm;        // vector mask-enable bit
 
         // memory-only fields (meaningful when opcode is LOAD_FP/STORE_FP)
-        // logic [2:0]    width;     // EEW encoding for loads/stores
-        // logic [2:0]    nf;        // number of fields (segments)
-        // logic          mew;
-        // logic [1:0]    mop;       // addressing mode: 00 unit-stride, 10 strided,
-        //                           //                   01 indexed-unordered, 11 indexed-ordered
-        // logic [4:0]    umop;      // lumop / sumop
+        logic [2:0]    nf;        // number of fields (segments)
+        logic [2:0]    width;     // EEW encoding for loads/stores
+        logic          mew;
+        logic [1:0]    mop;       
+        logic [4:0]    umop;      // lumop / sumop
 
         // category flags -- consumers branch on these, never on raw opcode bits
         logic          is_arith;
@@ -133,18 +134,18 @@ package vpu_pkg;
         logic          is_store;
         // logic          is_config;
         // logic          is_mask_logic;
-        // logic          is_reduction;
-        // logic          is_widening;
-        logic             is_narrowing;
+        logic          is_reduction;
+        logic          is_widening;
+        logic          is_narrowing;
         // logic          is_signed;
 
         // operand-presence flags -- tell the register-read stage what to fetch
-        // logic          uses_vs1;
-        // logic          uses_vs2;
-        // logic          uses_vd_src;     // vd/vs3 also read (macc-style, store data)
-        // logic          uses_rs1_scalar;
-        // logic          uses_rs2_scalar;
-        // logic          uses_imm;
+        logic          uses_vs1;
+        logic          uses_vs2;
+        logic          uses_vd_src;     // vd/vs3 also read (macc-style, store data)
+        logic          uses_rs1_scalar;
+        logic          uses_rs2_scalar;
+        logic          uses_imm;
     } vec_decoded_t;
 
 

@@ -3,9 +3,11 @@
 There are two types of applications to test the VPU: data parallel kernels and testbench application for module validation. 
 
 For the easiness of instruction deploying the following mechanism has been mounted. 
-1. Compile application: make build-sw PROJECT=vpu_xif_decoder
-2. With this compiled instructions recorded in main.S. For practicity to test modules with gen_stimulus.py, compiled instructions are extracted to stimulus.txt, which is injeted test bench.
-There are two options for module testing. 1: to test each module with "make run-questa-tb TB_TOP=<under-test-tb>". 2. Test of the whole vpu with instructions deployed through the Core-V Extension Interface.
+1. Compile application: `make build-sw PROJECT=vpu_xif_decoder`
+2. With this compiled instructions recorded in main.S. For practicity to test modules with gen_stimulus.py, compiled instructions are extracted to *stimulus.txt*, which is injeted test bench.
+There are two options for module testing: 
+    1. to test each module with `make run-questa-tb TB_TOP=<under-test-tb>`. 
+    2. Test of the whole vpu with instructions deployed through the Core-V Extension Interface.
 
 # VPU Verification Flow
 
