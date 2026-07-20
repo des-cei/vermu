@@ -4,8 +4,8 @@
 // Ane Corral (ane.corral@upm.es)
 
 module obi_lsu_top
- import vpu_pkg::*;
- #(
+import vpu_pkg::*;
+#(
     parameter type opcode_t                  = logic,
     parameter type obi_req_t                 = logic,
     parameter type obi_resp_t                = logic,

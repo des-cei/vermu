@@ -20,62 +20,62 @@ __attribute__((aligned(16))) uint32_t g_actual[MAX_N];
 // -------------------------------------------------------------------------
 __attribute__((optimize("O3", "noinline", "no-tree-vectorize")))
 void index_golden32(uint32_t *a, uint32_t *b, uint32_t *c, int n) {
-  for (int i = 0; i < n; ++i) { a[i] = b[i] + i * c[i]; }
+    for (int i = 0; i < n; ++i) { a[i] = b[i] + i * c[i]; }
 }
 
 __attribute__((optimize("O3", "noinline", "no-tree-vectorize")))
 void index_golden16(uint16_t *a, uint16_t *b, uint16_t *c, int n) {
-  for (int i = 0; i < n; ++i) { a[i] = b[i] + i * c[i]; }
+    for (int i = 0; i < n; ++i) { a[i] = b[i] + i * c[i]; }
 }
 
 __attribute__((optimize("O3", "noinline", "no-tree-vectorize")))
 void index_golden8(uint8_t *a, uint8_t *b, uint8_t *c, int n) {
-  for (int i = 0; i < n; ++i) { a[i] = b[i] + i * c[i]; }
+    for (int i = 0; i < n; ++i) { a[i] = b[i] + i * c[i]; }
 }
 
 // -------------------------------------------------------------------------
 // 3. Vector Functions (RVV Intrinsics) 
 // -------------------------------------------------------------------------
 void index_vec32(uint32_t *a, uint32_t *b, uint32_t *c, int n) {
-  size_t vlmax = __riscv_vsetvlmax_e32m1();
-  vuint32m1_t vec_i = __riscv_vid_v_u32m1(vlmax);
-  
-  for (size_t vl; n > 0; n -= vl, a += vl, b += vl, c += vl) {
-    vl = __riscv_vsetvl_e32m1(n);
-    vuint32m1_t vec_b = __riscv_vle32_v_u32m1(b, vl);
-    vuint32m1_t vec_c = __riscv_vle32_v_u32m1(c, vl);
-    vuint32m1_t vec_a = __riscv_vmacc_vv_u32m1(vec_b, vec_c, vec_i, vl);
-    __riscv_vse32_v_u32m1(a, vec_a, vl);
-    vec_i = __riscv_vadd_vx_u32m1(vec_i, vl, vl);
-  }
+    size_t vlmax = __riscv_vsetvlmax_e32m1();
+    vuint32m1_t vec_i = __riscv_vid_v_u32m1(vlmax);
+    
+    for (size_t vl; n > 0; n -= vl, a += vl, b += vl, c += vl) {
+        vl = __riscv_vsetvl_e32m1(n);
+        vuint32m1_t vec_b = __riscv_vle32_v_u32m1(b, vl);
+        vuint32m1_t vec_c = __riscv_vle32_v_u32m1(c, vl);
+        vuint32m1_t vec_a = __riscv_vmacc_vv_u32m1(vec_b, vec_c, vec_i, vl);
+        __riscv_vse32_v_u32m1(a, vec_a, vl);
+        vec_i = __riscv_vadd_vx_u32m1(vec_i, vl, vl);
+    }
 }
 
 void index_vec16(uint16_t *a, uint16_t *b, uint16_t *c, int n) {
-  size_t vlmax = __riscv_vsetvlmax_e16m1();
-  vuint16m1_t vec_i = __riscv_vid_v_u16m1(vlmax);
-  
-  for (size_t vl; n > 0; n -= vl, a += vl, b += vl, c += vl) {
-    vl = __riscv_vsetvl_e16m1(n);
-    vuint16m1_t vec_b = __riscv_vle16_v_u16m1(b, vl);
-    vuint16m1_t vec_c = __riscv_vle16_v_u16m1(c, vl);
-    vuint16m1_t vec_a = __riscv_vmacc_vv_u16m1(vec_b, vec_c, vec_i, vl);
-    __riscv_vse16_v_u16m1(a, vec_a, vl);
-    vec_i = __riscv_vadd_vx_u16m1(vec_i, vl, vl);
-  }
+    size_t vlmax = __riscv_vsetvlmax_e16m1();
+    vuint16m1_t vec_i = __riscv_vid_v_u16m1(vlmax);
+    
+    for (size_t vl; n > 0; n -= vl, a += vl, b += vl, c += vl) {
+        vl = __riscv_vsetvl_e16m1(n);
+        vuint16m1_t vec_b = __riscv_vle16_v_u16m1(b, vl);
+        vuint16m1_t vec_c = __riscv_vle16_v_u16m1(c, vl);
+        vuint16m1_t vec_a = __riscv_vmacc_vv_u16m1(vec_b, vec_c, vec_i, vl);
+        __riscv_vse16_v_u16m1(a, vec_a, vl);
+        vec_i = __riscv_vadd_vx_u16m1(vec_i, vl, vl);
+    }
 }
 
 void index_vec8(uint8_t *a, uint8_t *b, uint8_t *c, int n) {
-  size_t vlmax = __riscv_vsetvlmax_e8m1();
-  vuint8m1_t vec_i = __riscv_vid_v_u8m1(vlmax);
+    size_t vlmax = __riscv_vsetvlmax_e8m1();
+    vuint8m1_t vec_i = __riscv_vid_v_u8m1(vlmax);
 
-  for (size_t vl; n > 0; n -= vl, a += vl, b += vl, c += vl) {
-    vl = __riscv_vsetvl_e8m1(n);
-    vuint8m1_t vec_b = __riscv_vle8_v_u8m1(b, vl);
-    vuint8m1_t vec_c = __riscv_vle8_v_u8m1(c, vl);
-    vuint8m1_t vec_a = __riscv_vmacc_vv_u8m1(vec_b, vec_c, vec_i, vl);
-    __riscv_vse8_v_u8m1(a, vec_a, vl);
-    vec_i = __riscv_vadd_vx_u8m1(vec_i, vl, vl);
-  }
+    for (size_t vl; n > 0; n -= vl, a += vl, b += vl, c += vl) {
+        vl = __riscv_vsetvl_e8m1(n);
+        vuint8m1_t vec_b = __riscv_vle8_v_u8m1(b, vl);
+        vuint8m1_t vec_c = __riscv_vle8_v_u8m1(c, vl);
+        vuint8m1_t vec_a = __riscv_vmacc_vv_u8m1(vec_b, vec_c, vec_i, vl);
+        __riscv_vse8_v_u8m1(a, vec_a, vl);
+        vec_i = __riscv_vadd_vx_u8m1(vec_i, vl, vl);
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -83,39 +83,39 @@ void index_vec8(uint8_t *a, uint8_t *b, uint8_t *c, int n) {
 // -------------------------------------------------------------------------
 
 #define TEST_BODY(TYPE, NAME_SUFFIX, GOLDEN_FUNC, VEC_FUNC, CONST_N) \
-  do { \
-    /* Map local pointers to the global shared buffers */ \
-    TYPE *B = (TYPE*)g_B; \
-    TYPE *C = (TYPE*)g_C; \
-    TYPE *golden = (TYPE*)g_golden; \
-    TYPE *actual = (TYPE*)g_actual; \
-    unsigned int cycles_golden, cycles_vec; \
-    \
-    /* Initialize Data (only up to CONST_N) */ \
-    for (int i = 0; i < CONST_N; i++) { B[i] = (TYPE)rand(); C[i] = (TYPE)rand(); } \
-    \
-    /* Golden Run */ \
-    CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
-    CSR_WRITE(CSR_REG_MCYCLE, 0); \
-    GOLDEN_FUNC(golden, B, C, CONST_N); \
-    CSR_READ(CSR_REG_MCYCLE, &cycles_golden); \
-    \
-    /* Vector Run */ \
-    CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
-    CSR_WRITE(CSR_REG_MCYCLE, 0); \
-    VEC_FUNC(actual, B, C, CONST_N); \
-    CSR_READ(CSR_REG_MCYCLE, &cycles_vec); \
-    \
-    /* Verify Loop - CONST_N ensures no vlenb generation */ \
-    int pass = 1; \
-    for (int i = 0; i < CONST_N; i++) { \
-        if (golden[i] != actual[i]) { pass = 0; break; } \
-    } \
-    \
-    int speedup = (cycles_vec > 0) ? (int)((100.0f * cycles_golden) / cycles_vec) : 0; \
-    printf("vec" #NAME_SUFFIX " (N=%4d): %s | Golden: %d, Vector: %d | Speedup: %d.%02dx\r\n", \
-            CONST_N, pass ? "PASS" : "FAIL", cycles_golden, cycles_vec, speedup / 100, speedup % 100); \
-  } while(0)
+    do { \
+        /* Map local pointers to the global shared buffers */ \
+        TYPE *B = (TYPE*)g_B; \
+        TYPE *C = (TYPE*)g_C; \
+        TYPE *golden = (TYPE*)g_golden; \
+        TYPE *actual = (TYPE*)g_actual; \
+        unsigned int cycles_golden, cycles_vec; \
+        \
+        /* Initialize Data (only up to CONST_N) */ \
+        for (int i = 0; i < CONST_N; i++) { B[i] = (TYPE)rand(); C[i] = (TYPE)rand(); } \
+        \
+        /* Golden Run */ \
+        CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
+        CSR_WRITE(CSR_REG_MCYCLE, 0); \
+        GOLDEN_FUNC(golden, B, C, CONST_N); \
+        CSR_READ(CSR_REG_MCYCLE, &cycles_golden); \
+        \
+        /* Vector Run */ \
+        CSR_CLEAR_BITS(CSR_REG_MCOUNTINHIBIT, 0x1); \
+        CSR_WRITE(CSR_REG_MCYCLE, 0); \
+        VEC_FUNC(actual, B, C, CONST_N); \
+        CSR_READ(CSR_REG_MCYCLE, &cycles_vec); \
+        \
+        /* Verify Loop - CONST_N ensures no vlenb generation */ \
+        int pass = 1; \
+        for (int i = 0; i < CONST_N; i++) { \
+            if (golden[i] != actual[i]) { pass = 0; break; } \
+        } \
+        \
+        int speedup = (cycles_vec > 0) ? (int)((100.0f * cycles_golden) / cycles_vec) : 0; \
+        printf("vec" #NAME_SUFFIX " (N=%4d): %s | Golden: %d, Vector: %d | Speedup: %d.%02dx\r\n", \
+                CONST_N, pass ? "PASS" : "FAIL", cycles_golden, cycles_vec, speedup / 100, speedup % 100); \
+    } while(0)
 
 
 /* * Function Generator: Attributes set to O1 to prevent loop versioning
@@ -144,15 +144,15 @@ DEFINE_TEST_SUITE(1024)
 // -------------------------------------------------------------------------
 
 int main() {
-  printf("Starting RVV Index Tests (Shared RAM - Fixed N)...\r\n\n");
-  srand(0xdeadbeef);
+    printf("Starting RVV Index Tests (Shared RAM - Fixed N)...\r\n\n");
+    srand(0xdeadbeef);
 
-  run_tests_64();
-  run_tests_128();
-  run_tests_256();
-  run_tests_512();
-  run_tests_1024();
+    run_tests_64();
+    run_tests_128();
+    run_tests_256();
+    run_tests_512();
+    run_tests_1024();
 
-  printf("All tests completed.\r\n");
-  return 0;
+    printf("All tests completed.\r\n");
+    return 0;
 }

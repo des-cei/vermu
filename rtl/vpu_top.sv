@@ -4,10 +4,8 @@
 // Ane Corral (ane.corral@upm.es)
 
 module vpu_top
- import rvv_instr_pkg::*;
- import vpu_pkg::*;
- import vector_ops_pkg::*; 
-
+import rvv_instr_pkg::*;
+import vpu_pkg::*;
 #(
     // CVXIF Types
     parameter  int unsigned NrRgprPorts         = 2,
@@ -26,132 +24,110 @@ module vpu_top
     parameter  type         obi_resp_t          = logic,
     parameter  int unsigned EXT_XBAR_NMASTER    = 1
     
-    ) ( 
+) ( 
 
     input logic               clk_i,   
     input logic               rst_ni,
     // CVXIF Interface
     input  logic              x_issue_valid_i,
-		output logic              x_issue_ready_o,
-		input  x_issue_req_t      x_issue_req_i,
-		output x_issue_resp_t     x_issue_resp_o,
-		input  x_register_t       x_register_i,
+    output logic              x_issue_ready_o,
+    input  x_issue_req_t      x_issue_req_i,
+    output x_issue_resp_t     x_issue_resp_o,
+    input  x_register_t       x_register_i,
     input  logic              x_register_valid_i,
     output logic              x_register_ready_o,
-		input  logic              x_commit_valid_i,
-		input  x_commit_t         x_commit_i,
-		output logic              x_result_valid_o,
-		input  logic              x_result_ready_i,
-		output x_result_t         x_result_o,
+    input  logic              x_commit_valid_i,
+    input  x_commit_t         x_commit_i,
+    output logic              x_result_valid_o,
+    input  logic              x_result_ready_i,
+    output x_result_t         x_result_o,
 
     input  obi_resp_t [EXT_XBAR_NMASTER-1:0] masters_resp_i,
     output obi_req_t  [EXT_XBAR_NMASTER-1:0] masters_req_o
 );
 
-  // Issue interface signals
-  x_issue_req_t  issue_req;
-  x_issue_resp_t issue_resp;
-  logic issue_valid, issue_ready;
-  
-  // Register interface signals   
-  x_register_t register;
-  logic register_valid;
+    // Issue interface signals
+    x_issue_req_t  issue_req;
+    x_issue_resp_t issue_resp;
+    logic issue_valid, issue_ready;
 
-  // Commit interface signals //TODO: assignment
-  x_commit_t commit;
-  logic commit_valid;
+    // Register interface signals   
+    x_register_t register;
+    logic register_valid, register_ready;
 
-  //Result interface
-  x_result_t result;
-  logic result_valid, result_ready;
+    // Commit interface signals
+    x_commit_t commit;
+    logic commit_valid;
 
-  // Issue and Register interface
-  assign x_issue_ready_o      = issue_ready; 
-  assign x_issue_resp_o       = issue_resp;
-  assign x_register_ready_o   = x_issue_ready_o;
-  assign x_result_o           = result;
-  assign x_result_valid_o     = result_valid;
+    //Result interface
+    x_result_t result;
+    logic result_valid, result_ready;
 
-  assign issue_req            = x_issue_req_i;
-  assign issue_valid          = x_issue_valid_i;
-  assign register             = x_register_i;
-  assign register_valid       = x_register_valid_i;
-  assign commit               = x_commit_i;
-  assign commit_valid         = x_commit_valid_i;
-  assign result_ready         = x_result_ready_i;
+    // Issue and Register interface
+    assign x_issue_ready_o      = issue_ready; 
+    assign x_issue_resp_o       = issue_resp;
+    assign x_register_ready_o   = register_ready;
+    assign x_result_o           = result;
+    assign x_result_valid_o     = result_valid;
 
-  /////////////////////
-  // Issue Interface //
-  /////////////////////
-  //TODO
-  always_comb begin: issue_interface
-    issue_ready              = (!buff_full) 1'b1 : 1'b0;
-    issue_resp.accept        = '0;  //dec
-    issue_resp.writeback     = '0;  //dec
-    issue_resp.register_read = '0;  //dec
-  end
-  
-  ////////////////////////
-  // Register Interface //
-  ////////////////////////
-
-  always_comb begin: register_interface
-  
-  end
-
-  //////////////////////
-  // Commit Interface //
-  //////////////////////
-
-  always_comb begin: commit_interface
-  
-  end
-
-  //////////////////////
-  // Result Interface //
-  //////////////////////
-
-  always_comb begin: result_interface
-    result_valid  = result_valid;   
-    result.hartid = result.hartid;   
-    result.id     = result.id;
-    result.data   = result.data;
-    result.rd     = result.rd;
-    result.we     = result.we; 
-  end
+    assign issue_req            = x_issue_req_i;
+    assign issue_valid          = x_issue_valid_i;
+    assign register             = x_register_i;
+    assign register_valid       = x_register_valid_i;
+    assign commit               = x_commit_i;
+    assign commit_valid         = x_commit_valid_i;
+    assign result_ready         = x_result_ready_i;
 
 
-  ///////////////
-  // VERMU 2.0 //
-  ///////////////
+    ///////////////
+    // VERMU 2.0 //
+    ///////////////
 
-  vpu_control_unit #(
-    .NrRgprPorts      (NrRgprPorts),
-    .readregflags_t   (readregflags_t),
-    .writeregflags_t  (writeregflags_t),
-    .id_t             (id_t),
-    .hartid_t         (hartid_t),
-    .x_issue_req_t    (x_issue_req_t),
-    .x_issue_resp_t   (x_issue_resp_t),
-    .x_register_t     (x_register_t),
-    .x_commit_t       (x_commit_t),
-    .x_result_t       (x_result_t),
-    .registers_t      (registers_t)
-  ) i_vpu_control_unit (
-    .issue_valid_i     (issue_valid),
-    .issue_ready_o     (issue_ready),
-    .issue_req_i       (issue_req),
-    .issue_resp_o      (issue_resp),
-    .register_valid_i  (register_valid),
-    .register_i        (register),
-    .commit_valid_i    (commit_valid),
-    .commit_i          (commit),
-    .result_valid_o    (result_valid),
-    .result_ready_i    (result_ready),
-    .result_o          (result)  //TODO: ? 
-  )
+    //Interface instance 
+    if_xif_exe xif_exe_i ();
+
+    vpu_control_unit #(
+        .NrRgprPorts      (NrRgprPorts),
+        .readregflags_t   (readregflags_t),
+        .writeregflags_t  (writeregflags_t),
+        .id_t             (id_t),
+        .hartid_t         (hartid_t),
+        .x_issue_req_t    (x_issue_req_t),
+        .x_issue_resp_t   (x_issue_resp_t),
+        .x_register_t     (x_register_t),
+        .x_commit_t       (x_commit_t),
+        .x_result_t       (x_result_t),
+        .registers_t      (registers_t)
+    ) i_vpu_control_unit (
+        .clk_i            (clk_i),
+        .rst_ni           (rst_ni),
+        .x_issue_valid_i     (issue_valid),
+        .x_issue_ready_o     (issue_ready),
+        .x_issue_req_i       (issue_req),
+        .x_issue_resp_o      (issue_resp),
+        .x_register_valid_i  (register_valid),
+        .x_register_i        (register),
+        .x_register_ready_o  (register_ready),
+        .x_commit_valid_i    (commit_valid),
+        .x_commit_i          (commit),
+        .x_result_valid_o    (result_valid),
+        .x_result_ready_i    (result_ready),
+        .x_result_o          (result),  
+        .if_wrapper_exe (xif_exe_i.xif_wrapper) 
+    );
+
+    execution_units execution_units_i 
+    (
+        .clk_i,
+        .rst_ni,
+        .if_exe_wrapper (xif_exe_i.exe_unit)
+        // .instr_accept_o (instr_accept),  // TODO: assign
+        // .result_valid_i (result_valid)
+    );
+
+
 /////// User ////////////
-
+/*
   logic  instr_vrf_we, op_valid_ls, op_valid_simd, done_w, done_r2,
             simd_result_valid, ls_valid, csr_valid, result_valid;
   logic  vrf_we, lsu_vrf_we;
@@ -506,5 +482,5 @@ module vpu_top
   assign debug_if.result            = wdata;
   assign debug_if.vrf_vd_data       = vrf_vd_data;
   assign debug_if.simd_result_valid = simd_result_valid;
-  
+  */
 endmodule

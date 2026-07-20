@@ -4,9 +4,9 @@
 // Ane Corral (ane.corral@upm.es)
 
 module VAU_lanes 
- import vpu_pkg::*; 
- import vector_ops_pkg::*;
- #(
+import vpu_pkg::*; 
+import vector_ops_pkg::*;
+#(
    	parameter type data_t = logic [31:0]
 )(
     input logic   clk_i, 

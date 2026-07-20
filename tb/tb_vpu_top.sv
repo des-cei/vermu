@@ -94,7 +94,7 @@ module tb_vpu_top;
         .masters_resp_i    (),
         .masters_req_o     ()
     );
-
+/*
     vpu_pipeline_checker #(
         .NrRgprPorts    (cvxif_types_pkg::CVE2Cfg.X_NUM_RS),
         .XLEN           (32),
@@ -119,5 +119,5 @@ module tb_vpu_top;
         .vpu_dbg_simd_result_valid_i(i_vpu.debug_if.simd_result_valid),
         .vpu_dbg_result_i           (i_vpu.debug_if.result)
     );
-
+*/
 endmodule

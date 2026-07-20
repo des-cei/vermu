@@ -1,0 +1,3 @@
+[submodule "rtl/vendor/pulp_platform/common_cells"]
+	path = rtl/vendor/pulp_platform/common_cells
+	url = https://github.com/pulp-platform/common_cells.git

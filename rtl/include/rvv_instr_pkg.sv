@@ -194,7 +194,10 @@ package rvv_instr_pkg;
         VL2RE8_V, VL2RE16_V, VL2RE32_V,
         VL4RE8_V, VL4RE16_V, VL4RE32_V,
         VL8RE8_V, VL8RE16_V, VL8RE32_V, 
-        VS1R_V, VS2R_V, VS4R_V, VS8R_V
+        VS1R_V, VS2R_V, VS4R_V, VS8R_V,
+
+        //System Instructions
+        CSRRS
     } vec_instr_e;
 
 
@@ -206,7 +209,7 @@ package rvv_instr_pkg;
         OP_VADD, OP_VSUB, OP_VRSUB,
         OP_VAND, OP_VOR, OP_VXOR,	 
         OP_VWADDU, OP_VWADD, OP_VWSUBU, OP_VWSUB,
-    	  OP_VADC, OP_VSBC,
+    	OP_VADC, OP_VSBC,
 
         // Integer add-with-carry and subtract-with-borrow carry-out instructions
         OP_VMADC, OP_VMSBC, 

@@ -15,10 +15,14 @@
 */
 
 module vpu_control_unit
+import cvxif_types_pkg::*;
+import rvv_instr_pkg::vec_instr_e;
+import vpu_pkg::*;
 #(
     parameter  int unsigned NrRgprPorts         = 2,
     parameter  int unsigned XLEN                = 32,
     //X_ID_WIDTH?
+    parameter               INSTR_DEPTH         = 4,
     parameter  type         readregflags_t      = logic,
     parameter  type         writeregflags_t     = logic,
     parameter  type         id_t                = logic,
@@ -30,248 +34,232 @@ module vpu_control_unit
     parameter  type         x_result_t          = logic,
     localparam type         registers_t         = logic [NrRgprPorts-1:0][XLEN-1:0]
 )(
-    // CVXIF Interface  //TODO: Not sure all this XIF assigned here
-    input  logic              x_issue_valid_i,
-		output logic              x_issue_ready_o,
-		input  x_issue_req_t      x_issue_req_i,
-		output x_issue_resp_t     x_issue_resp_o,
-    input  logic              x_register_valid_i,
-		input  x_register_t       x_register_i,
-		input  logic              x_commit_valid_i,
-		input  x_commit_t         x_commit_i,
-		output logic              x_result_valid_o,
-		input  logic              x_result_ready_i,
-		output x_result_t         x_result_o,
+    input  logic              clk_i,
+    input  logic              rst_ni,
+    // CVXIF Interface 
+    // Issue interface
+    input  logic           x_issue_valid_i,
+	output logic           x_issue_ready_o,
+	input  x_issue_req_t   x_issue_req_i,
+	output x_issue_resp_t  x_issue_resp_o,
+    // Register interface
+    input  logic           x_register_valid_i,
+	input  x_register_t    x_register_i,
+    output logic           x_register_ready_o,
+    // Commit interface
+	input  logic           x_commit_valid_i,
+	input  x_commit_t      x_commit_i,
+    // Result interface
+	output logic           x_result_valid_o,
+	input  logic           x_result_ready_i,
+	output x_result_t      x_result_o,
+    if_xif_exe.xif_wrapper if_wrapper_exe
 );
 
+    //////////////////////////////
+    // User application signals //
+    //////////////////////////////
 
-  buff_dec_t buff_dec;
-  logic writeback, accept;
-  readregflags_t register_read;
+    vec_instr_e vec_instr;
 
-  vpu_xif_decoder #(
-    .readregflags_t (readregflags_t),
-    .vec_instr_e    (vec_instr_e)
-  ) i_vpu_xif_decoder (
-    .issue_valid_i  (x_issue_valid_i),
-    .instr_i        (x_issue_req_i.instr),
-    .accept_o       (accept),
-    .writeback_o    (writeback),
-    .register_read_o(register_read),
-    .vec_instr_o    (buff_dec.instr_enum)
+    /////////////////////////
+    // xif_wrapper signals //
+    /////////////////////////
+
+    x_issue_t  temp_x_issue_i;
+    x_issue_resp_t resp_instr_predecoder;
+    logic     rs_valid_flag;                  
+
+    // ISSUE FIFO signals (First FIFO INTERA)
+    x_issue_t   issue_commit_i;         // Input to FIFO commit
+    x_issue_t   issue_commit_o;         // Output from FIFO_commit - Input to FIFO_instr if POP in FIFO_commit + ~kill + accept
+    logic       fifo_commit_full;
+    logic       fifo_commit_empty;
+    logic [1:0] fifo_commit_usage;
+    logic       fifo_commit_push;
+    logic       fifo_commit_pop;
+
+    // TASK FIFO signals (Second FIFO INTERA)
+    x_issue_t   issue_instr_o;          //Output from FIFO_instr - Input to execution block
+    logic       fifo_instr_full;
+    logic       fifo_instr_empty;
+    logic [1:0] fifo_instr_usage;
+    logic       fifo_instr_push;
+    logic       fifo_instr_pop;
+
+    // RESULT FIFO signals (Third FIFO INTERA)
+    x_issue_fifo_res_t x_fifo_res_i; // Output from the execution block - Input to the FIFO_result
+    x_issue_fifo_res_t x_fifo_res_o; // Output from the FIFO_result - Input to Result interface
+    logic       fifo_res_full;
+    logic       fifo_res_empty;
+    logic [1:0] fifo_res_usage;
+    logic       fifo_res_push;
+    logic       fifo_res_pop;
+
+    // Extended decoder
+    vec_decoded_t decoder_req;
+    logic         decoder_valid;         
+
+    ///////////////////////////////
+    // xif_wrapper control logic //
+    ///////////////////////////////
+    // assign  temp_x_issue_i.req      = x_issue_req_i;
+    assign  temp_x_issue_i.req.instr  = x_issue_req_i.instr;
+    assign  temp_x_issue_i.req.hartid = x_issue_req_i.hartid;
+    assign  temp_x_issue_i.req.id     = x_issue_req_i.id;
+
+    assign  temp_x_issue_i.resp     = '0;
+    assign  temp_x_issue_i.register = x_register_i;
+
+    vpu_xif_decoder #(
+        .NrRgprPorts    (NrRgprPorts),
+        .readregflags_t (readregflags_t),
+        .x_issue_resp_t (x_issue_resp_t)   
+    ) i_vpu_xif_decoder (
+        .issue_valid_i  (x_issue_valid_i),
+        .instr_i        (temp_x_issue_i.req.instr),
+        .x_issue_resp_o (resp_instr_predecoder),
+        .vec_instr_o    (vec_instr) 
     );
 
-  // CV-X-IF response
-  assign x_issue_ready_o              = !full_buffer;   // TODO: acceptance of new  instruction request. 
-  assign x_issue_resp_o.writeback     = writeback;
-  assign x_issue_resp_o.accept        = accept;       // TODO: should check illegality before accept (CSRs)
-  assign x_issue_resp_o.register_read = register_read
-
-  assign x_result_valid_o = ;
-  assign x_result_o       = ;
-  //result_ready_i for ...
-
-  // Decoded context to buffer
-  assign buff_dec.writeback       = writeback;  
-
-  always_comb begin: extract_rs_data                            // TODO: check register read before extraction. Condition in accept?
-    if (register_read  = 2'b1) buff_dec.rs[0] = register_i[0];
-    else if (register_read  = 2'b3) buff_dec.rs = register_i;
-    else buff_dec = '0;
-  end
-
-  // Instruction queue
-  //    buff_dec_i
-  //    hartid_i
-  //    id_i 
-  //    buff_dec_o
-  //    hartid_o
-  //    id_o 
-
-  // vpu_decoder #(
-
-  // )i_vpu_decoder (
-
-  // );
 
 
+    assign x_register_ready_o           = x_issue_ready_o;
+    assign x_issue_resp_o.accept        = resp_instr_predecoder.accept;
+    assign x_issue_resp_o.writeback     = resp_instr_predecoder.writeback;
+    assign x_issue_resp_o.register_read = resp_instr_predecoder.register_read;
+
+    //rs_valid_flag goes high when the required source registers are available
+    assign rs_valid_flag = &(temp_x_issue_i.register.rs_valid | ~ x_issue_resp_o.register_read); // Reduction over the 'or' of rs_valid + not(rs_valid_mask) // Obtained with a Truth table and corresponding Karnough map
+
+    // COMMIT FIFO
+    assign x_issue_ready_o = ~fifo_commit_full && ~fifo_instr_full && ~fifo_res_full && (fifo_commit_usage + fifo_instr_usage + fifo_res_usage < INSTR_DEPTH) && rs_valid_flag && rst_ni; // REAL FUNCTIONALITY, UNCOMMENT WHEN PROBLEM IS SORTED OUT! (rs_valid left out to avoid comb loops on the CPU side)
+
+    // Fire issue. Fire when the issue is valid, is ready to accept and the issue is ready. 
+    assign fifo_commit_push = x_issue_valid_i && x_issue_ready_o && x_issue_resp_o.accept; //If issue transaction then issue_req and issue_resp go to fifo, if not accepted or kill they will be discarded later on
+    // USER: Assign data to be sent to fifo_commit     
+    assign issue_commit_i.req      = temp_x_issue_i.req;  // Request to COMMIT_FIFO. Possibility to change FIFO input data.
+    // assign issue_commit_i.resp     = x_issue_resp_o; // Corresponding Issue resp goes to the fifo as well
+    assign issue_commit_i.resp     = x_issue_resp_o;
+    assign issue_commit_i.register = x_register_i;
+
+    // POP when commit_valid + issue transaction in progress or already done, if issue transaction has not happened yet then wait - All the commit transactions are in order matching with issue transactions
+    assign fifo_commit_pop = ~fifo_commit_empty & x_commit_valid_i & (x_commit_i.id == issue_commit_o.req.id) & ~(x_commit_i.id == temp_x_issue_i.req.id && x_issue_valid_i && ~x_issue_ready_o);
+  
+    // INSTR FIFO                                                                         
+    assign fifo_instr_push = fifo_commit_pop && !fifo_instr_full && !x_commit_i.commit_kill && issue_commit_o.resp.accept && !fifo_commit_empty; // We input data from FIFO_commit when fifo_commit_pop + no kill (commit) + accept instr.
+
+    // RESULT FIFO
+    assign fifo_res_push = x_fifo_res_i.result_valid_exec_o & ~fifo_res_full;   // Result coming from execution block
+    assign fifo_res_pop  =  x_result_ready_i & ~fifo_res_empty; // Pop from result FIFO when FIFO is not empty and the result is accepted by the CPU
+
+
+    ////////////////////
+    // FIFO Instances //
+    ////////////////////
+
+    // First FIFO to go through the issue and commit stages
+    // Inputs data when issue transaction, outputs data when commit_valid + issue transaction done or in progress
+    fifo_v3 #(
+        .FALL_THROUGH(1),                    //Combinational path if FIFO is empty
+    //    .DATA_WIDTH  (64),
+        .DEPTH       (INSTR_DEPTH),          // Maximum 4 instr to accept
+        .dtype       (x_issue_t)           // We will input req and resp per instr
+    //     .FPGA_EN     (CVA6Cfg.FPGA_EN) -> in the CVA6 repo there is an optimization for FPGA fifos, could be interesting
+    ) fifo_commit_i (
+        .clk_i     (clk_i),
+        .rst_ni    (rst_ni),
+        .flush_i   (1'b0),                   // TODO - if necessary to flush in new x-if standard when kill a batch of offloaded instructions
+        .testmode_i(1'b0),
+        .full_o    (fifo_commit_full),
+        .empty_o   (fifo_commit_empty),
+        .usage_o   (fifo_commit_usage),
+        .data_i    (issue_commit_i),
+        .push_i    (fifo_commit_push),       // We input data when issue is fired
+        .data_o    (issue_commit_o),
+        .pop_i     (fifo_commit_pop)
+    );
+
+    // Second FIFO to go through decode/execution and result stages when commit has been asserted
+    fifo_v3 #(
+    //   .FALL_THROUGH(1),                  // STANDARD FIFO, generates the required clock latency by the x-if
+        .FALL_THROUGH(1),                   //Combinational path if FIFO is empty
+    //   .DATA_WIDTH  (64),
+        .DEPTH       (INSTR_DEPTH),         // Maximum 4 instr to execute
+        .dtype       (x_issue_t)          // We will input req and resp per instr
+    //   .FPGA_EN     (CVA6Cfg.FPGA_EN) -> in the CVA6 repo there is an optimization for FPGA fifos, could be interesting
+    ) fifo_instruction_i (
+        .clk_i     (clk_i),
+        .rst_ni    (rst_ni),
+        .flush_i   (1'b0),
+        .testmode_i(1'b0),
+        .full_o    (fifo_instr_full),
+        .empty_o   (fifo_instr_empty),
+        .usage_o   (fifo_instr_usage),
+        .data_i    (issue_commit_o),
+        .push_i    (fifo_instr_push),
+        .data_o    (issue_instr_o),
+        .pop_i     (fifo_instr_pop)
+    );
+
+    // Third FIFO to store the data comming from the execution block in case the CPU is not ready to receive it yet
+    fifo_v3 #(
+        .FALL_THROUGH(1),            //Combinational path if FIFO is empty
+    //   .DATA_WIDTH  (64),
+        .DEPTH       (INSTR_DEPTH),  // Maximum 4 instr to execute //
+        .dtype       (x_issue_fifo_res_t)        // We will input req and resp per instr
+    //   .FPGA_EN     (CVA6Cfg.FPGA_EN) -> in the CVA6 repo there is an optimization for FPGA fifos, could be interesting
+    ) fifo_result_i (
+        .clk_i     (clk_i),
+        .rst_ni    (rst_ni),
+        .flush_i   (1'b0),
+        .testmode_i(1'b0),
+        .full_o    (fifo_res_full),
+        .empty_o   (fifo_res_empty),
+        .usage_o   (fifo_res_usage),
+        .data_i    (x_fifo_res_i),
+        .push_i    (fifo_res_push), 
+        .data_o    (x_fifo_res_o),
+        .pop_i     (fifo_res_pop)
+    );
+
+    // TODO: Executer should be output of hazards detection logic
+    // Send instruction to execution unit
+    assign if_wrapper_exe.wrapper_exe_instr_valid = ~fifo_instr_empty;
+    assign if_wrapper_exe.wrapper_exe_instr_issue = issue_instr_o;
+    assign fifo_instr_pop = if_wrapper_exe.exe_wrapper_recv_instr_ready && ~fifo_instr_empty;
+    //Interface: Execution block <-> FIFO_result
+    assign if_wrapper_exe.wrapper_exe_recv_result_ready = ~fifo_res_full;       
+    assign x_fifo_res_i = if_wrapper_exe.exe_wrapper_result;  // TODO: not in case of the CSRs
+
+    always_comb begin
+        x_result_valid_o  = ~fifo_res_empty;
+        x_result_o.hartid = x_fifo_res_o.issue_exec_o.req.hartid; 
+        x_result_o.id     = x_fifo_res_o.issue_exec_o.req.id; // Giving back the instr id
+        x_result_o.rd     = x_fifo_res_o.issue_exec_o.req.instr[11:7]; // Giving back the dest reg
+        x_result_o.we     = x_fifo_res_o.issue_exec_o.resp.writeback;
+        x_result_o.data   = x_fifo_res_o.result_data_exec_o;  // Data processed by the custom instr
+    end
+
+
+    //////////////////////
+    // Extended decoder //
+    //////////////////////
+
+    vpu_decoder #(
+        .NrRgprPorts (NrRgprPorts),
+        .id_t        (id_t),
+        .hartid_t    (hartid_t),
+        .registers_t (registers_t),
+        .x_issue_t   (x_issue_t),
+        .vec_instr_e (vec_instr_e)
+    ) vpu_decoder_i (
+        .clk_i             (clk_i),
+        .req_valid_i       (fifo_instr_pop),
+        .instr_req_i       (issue_instr_o),
+        .vec_instr_i       (vec_instr),
+        .dec_resp_valid_o  (decoder_valid), // To data hazard detection 
+        .decoded_req_o     (decoder_req)
+    );
 
 endmodule: vpu_control_unit
-
-
-//   /////////
-//   // CSR //
-//   /////////
-// // TODO: activar writeback para CFG
-//   always_comb begin
-//     vtype_supported = 1'b1;
-//     csr_we_d        = 1'b0;
-//     csr_valid_d     = 1'b0;
-//     vlmax_d         = vlmax_q;
-//     vtype_d         = vtype_q; 
-//     vl_d            = vl_q;
-//     vstart_d        = vstart_q;
-//     issue_rs1       = '0;
-//     issue_rd        = '0; 
-//     result_d        = '0;
-
-//     if (state_o == S_BUSY) begin
-//         unique case (vpu_req_o.opcode)
-//           VSETVLI,
-//           VSETIVLI, 
-//           VSETVL: begin
-//             csr_valid_d = ~csr_valid_q;           
-//             issue_rs1 = vpu_req_o.rs1;
-//             issue_rd  = vpu_req_o.rd;
-//             vstart_d  = '0;
-//           end
-//           default: ; 
-//         endcase
-//     end else begin
-//         csr_valid_d = 1'b0; 
-//     end
-
-//     // Check for unsupported configuration    
-//     unique case (vpu_req_o.csr_vtype.vsew) 
-//       SEW_8, SEW_16, SEW_32: ; 
-//       default: begin 
-//         vtype_supported = 1'b0;
-//       end
-//     endcase
-
-//     unique case (vpu_req_o.csr_vtype.vlmul) 
-//       LMUL_F4: int_lmul4 = 1;   // 1/4 LMUL
-//       LMUL_F2: int_lmul4 = 2;   // 1/2 LMUL
-//       LMUL_1:  int_lmul4 = 4;   // 1 LMUL
-//       default: begin 
-//         vtype_supported = 1'b0;
-//         int_lmul4 = 0;
-//       end
-//     endcase
-
-//     if (vpu_req_o.csr_vtype.vta === 1'bx || vpu_req_o.csr_vtype.vma === 1'bx ) begin
-//       vtype_supported = 1'b0;
-//     end
- 
-//     // begin: AVL assignation 
-//     if (csr_valid_d && !vtype_supported) begin  
-//       vtype_d      = '0;
-//       vl_d         = '0;
-//       vlmax_d      = 32'd0;
-//       vtype_d.vill = 1'b1;
-//       csr_we_d     = 1'b1;    
-//       result_d     = '0;
-//     end else if (csr_valid_d) begin
-      
-//       vtype_d = vpu_req_o.csr_vtype;
-//       vlmax_d = compute_vlmax(vtype_d.vsew);  
-
-//       // Decode AVL
-//       if (vpu_req_o.opcode == VSETIVLI) begin 
-//         avl_int = issue_rs1;
-//       end else begin           // vsetvli / vsetvl
-//         if ( rs1_addr_q == 5'd0) begin 
-//           if (issue_rd == 5'd0) begin
-//             avl_int = vl_q;
-//             // Reserved if new VLMAX would shrink the current vl.
-//             if ((vlmax_d < vl_q) || vtype_q.vill || vlmax_d != vlmax_q) begin
-//               vtype_d.vill = 1'b1;
-//             end 
-//           end else begin
-//             // rs1 == x0 && rd != x0 -> AVL treated as ~0 to request VLMAX
-//             avl_int = 32'hFFFFFFFF;
-//           end
-//         end else begin
-//           // rs1 != x0: AVL is the unsigned integer in x[rs1]
-//           avl_int = issue_rs1;
-//         end
-//       end
-
-//       // rs1==x0 && rd==x0 case, skip normal update
-//       if (!vtype_d.vill) begin
-//         if (avl_int == 32'hFFFFFFFF) begin
-//           new_vl_int = vlmax_d;
-//         end else begin
-//           new_vl_int = compute_new_vl(avl_int, vlmax_d);
-//         end
-//         vl_d        = new_vl_int;
-//         csr_we_d    = 1'b1;
-//         if ((issue_rd == 5'h0) && (issue_rs1 == 5'h0)) begin 
-//           csr_we_d    = 1'b0;
-//         end
-
-//         // normal success clears vill bit
-//         vtype_d.vill = 1'b0;
-
-//         // Assertions to validate VL rules:
-//         // a) VL = 0 if AVL = 0
-//         if (avl_int == 0) begin
-//             assert (new_vl_int == 0) else $fatal("vpu_csr assertion (a) failed: AVL==0 but VL=%0d", new_vl_int);
-//         end
-//         // b) VL > 0 if AVL > 0
-//         if (avl_int > 0) begin
-//             assert (new_vl_int > 0) else $fatal("vpu_csr assertion (b) failed: AVL=%0d but VL=%0d", avl_int, new_vl_int);
-//         end
-//         // c) VL ≤ VLMAX
-//         assert (new_vl_int <= vlmax_d) else $fatal("vpu_csr assertion (c) failed: VL=%0d > VLMAX=%0d (AVL=%0d)", new_vl_int, vlmax_d, avl_int);
-//         // d) VL ≤ AVL
-//         if (avl_int != -1) begin
-//             assert (new_vl_int <= avl_int) else $fatal("vpu_csr assertion (d) failed: VL=%0d > AVL=%0d (VLMAX=%0d)", new_vl_int, avl_int, vlmax_d);
-//         end
-
-//       end else begin
-//         vl_d          = '0;
-//         vtype_d       = '0; 
-//         vtype_d.vill  = 1'b1;
-//       end
-
-//       if (vpu_req_d.opcode == VMV_XS) begin
-//         csr_we_d = 1'b1; 
-//       end
-
-//       result_d = vl_d; 
-//     //end  : AVL assignation
-//     end else if (vpu_req_d.mopcode == system) begin  
-
-//       // CSRR 
-//       unique case (csr_target) 
-//         CSR_VLENB: begin                        //TODO: other CSRs  
-//           if (csr_handle.read_CSR && ! csr_handle.write_CSR) begin
-//             result_d = VLENB;
-//             csr_we_d = 1'b1; 
-//           end else begin
-//             result_d = 1'b0;
-//           end
-//         end
-//         default:;
-//       endcase
-//     end   
-//   end
-
-
-//   always_ff  @(posedge clk_i or negedge rst_ni) begin 
-//     if(!rst_ni) begin
-//       vtype_q    <= '0;
-//       vl_q       <= '0;
-//       vstart_q   <= '0;
-//       rs1_addr_q <= '0;
-//       result_q   <= '0;
-//       vlmax_q    <= '0;
-//       csr_we_q   <= '0;
-//       csr_valid_q <= '0;
-//       illegal_req_q <= '0;
-//     end else begin
-//       vtype_q     <= vtype_d;
-//       vl_q        <= vl_d;
-//       vstart_q    <= vstart_d;
-//       rs1_addr_q  <= rs1_addr_d;
-//       result_q    <= result_d;
-//       vlmax_q     <= vlmax_d;
-//       csr_we_q    <= csr_we_d;
-//       csr_valid_q <= csr_valid_d;
-//       illegal_req_q <= illegal_req_d;
-//     end
-//   end
-
-  
-

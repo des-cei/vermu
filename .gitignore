@@ -1,3 +1,4 @@
+*.txt
 rtl/vpu_fsm.sv
 build/
 sw/build/

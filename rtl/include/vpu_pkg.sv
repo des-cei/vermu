@@ -74,8 +74,8 @@ package vpu_pkg;
     typedef enum logic [6:0] {   
         OPCODE_LOAD  = 7'h7,             
         OPCODE_STORE = 7'h27,            
-        OPCODE_OP_V  = 7'h57             
-        //system   = 7'b1110011     
+        OPCODE_OP_V  = 7'h57,
+        OPCODE_SYSTEM = 7'h73                   
     } major_opcode_e;
     
     //Operand type for OP-V instructions and operand-format 
