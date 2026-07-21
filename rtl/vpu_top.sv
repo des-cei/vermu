@@ -342,14 +342,46 @@ module vpu_top
             end
             VMV_SX: wdata = {96'h0, vpu_req.rs1};
             default: begin
-              if(!vpu_req.is_vmv_nr) begin
-                  if (vpu_req.vm) begin
-                    wdata = rdata1;                       
-                  end else begin
-                    for (int i = 0; i < VLEN; i++) begin  
-                      wdata[i] = mask[i] ? rdata1[i] : vrf_rdata2[i];
+                if(!vpu_req.is_vmv_nr) begin
+                    if (vpu_req.vm) begin
+                        wdata = rdata1;                       
+                    end else begin
+                        // for (int i = 0; i < VLEN; i++) begin  
+                        //   wdata[i] = mask[i] ? rdata1[i] : vrf_rdata2[i];
+                        // end
+                        unique case (csr_vtype.vsew)
+                            SEW_8: begin
+                                for (int elem = 0; elem < VLEN/8; elem++) begin
+                                    if (mask[elem]) begin
+                                        wdata[elem*8 +: 8] = rdata1[elem*8 +: 8];
+                                    end
+                                    else begin
+                                        wdata[elem*8 +: 8] = vrf_rdata2[elem*8 +: 8];
+                                    end
+                                end
+                            end
+                            SEW_16: begin
+                                for (int elem = 0; elem < VLEN/16; elem++) begin
+                                    if (mask[elem]) begin
+                                        wdata[elem*16 +: 16] = rdata1[elem*16 +: 16];
+                                    end
+                                    else begin
+                                        wdata[elem*16 +: 16] = vrf_rdata2[elem*16 +: 16];
+                                    end
+                                end
+                            end 
+                            default: begin 
+                                for (int elem = 0; elem < VLEN/16; elem++) begin
+                                    if (mask[elem]) begin
+                                        wdata[elem*32 +: 32] = rdata1[elem*32 +: 32];
+                                    end
+                                    else begin
+                                        wdata[elem*32 +: 32] = vrf_rdata2[elem*32 +: 32];
+                                    end
+                                end
+                            end
+                        endcase
                     end
-                  end
               end else begin
                 wdata = '0;
               end

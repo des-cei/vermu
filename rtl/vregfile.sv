@@ -106,6 +106,12 @@ module vregfile
                                 // mask agnostic
                                 vreg[waddr_i][8*b +: 8] <= 8'hFF;
                             end
+                            if (vpu_req_i.vm) begin
+                                // mask agnostic
+                                vreg[waddr_i][8*b +: 8] <= 8'hFF;
+                            end else begin
+                                vreg[waddr_i][8*b +: 8] <= wdata_i[8*b +: 8];
+                            end     
                         end else if (tail) begin
                             if (csr_vtype_i.vta) begin
                                 // tail agnostic
