@@ -53,7 +53,10 @@ import vpu_pkg::*;
 	output logic           x_result_valid_o,
 	input  logic           x_result_ready_i,
 	output x_result_t      x_result_o,
-    if_xif_exe.xif_wrapper if_wrapper_exe
+    if_xif_exe.xif_wrapper if_wrapper_exe,
+    if_xif_exe.xif_wrapper if_wrapper_exe_valu,
+    if_xif_exe.xif_wrapper if_wrapper_exe_vlsu,
+    if_xif_exe.xif_wrapper if_wrapper_exe_vsld
 );
 
     //////////////////////////////
@@ -61,7 +64,9 @@ import vpu_pkg::*;
     //////////////////////////////
 
     vec_instr_e vec_instr;
-
+    logic disp_ready;
+    x_issue_fifo_res_t vpu_fifo_res;
+    
     /////////////////////////
     // xif_wrapper signals //
     /////////////////////////
@@ -97,7 +102,7 @@ import vpu_pkg::*;
     logic       fifo_res_pop;
 
     // Extended decoder
-    vec_decoded_t decoder_req;
+    vpu_decoded_t decoder_req;
     logic         decoder_valid;         
 
     ///////////////////////////////
@@ -225,12 +230,21 @@ import vpu_pkg::*;
 
     // TODO: Executer should be output of hazards detection logic
     // Send instruction to execution unit
+
+    // Single Interface mode
     assign if_wrapper_exe.wrapper_exe_instr_valid = ~fifo_instr_empty;
     assign if_wrapper_exe.wrapper_exe_instr_issue = issue_instr_o;
     assign fifo_instr_pop = if_wrapper_exe.exe_wrapper_recv_instr_ready && ~fifo_instr_empty;
-    //Interface: Execution block <-> FIFO_result
+    // Interface: Execution block <-> FIFO_result
     assign if_wrapper_exe.wrapper_exe_recv_result_ready = ~fifo_res_full;       
     assign x_fifo_res_i = if_wrapper_exe.exe_wrapper_result;  // TODO: not in case of the CSRs
+
+    // // Multiple interface mode
+    // assign fifo_instr_pop = disp_ready && ~fifo_instr_empty;
+    // assign if_wrapper_exe_valu.wrapper_exe_recv_result_ready = ~fifo_res_full;
+    // Interface: Execution block <-> FIFO_result
+    // assign if_wrapper_exe.wrapper_exe_recv_result_ready = ~fifo_res_full;
+    // assign x_fifo_res_i = vpu_fifo_res;
 
     always_comb begin
         x_result_valid_o  = ~fifo_res_empty;
@@ -260,6 +274,26 @@ import vpu_pkg::*;
         .vec_instr_i       (vec_instr),
         .dec_resp_valid_o  (decoder_valid), // To data hazard detection 
         .decoded_req_o     (decoder_req)
+    );
+
+    vpu_dispatch
+    #(
+        .NUM_BANKS (),
+        .MAX_INFLIGHT ()
+    ) vpu_dispatch_i (
+        .clk_i          (clk_i),
+        .rst_ni         (rst_ni),
+        .disp_valid_i   (~fifo_instr_empty),
+        .disp_decoded_i (decoder_req),
+        .disp_issue_i   (issue_instr_o),  
+        .disp_ready_o   (disp_ready),
+        .kill_valid_i   ('0),
+        .kill_hartid_i  ('0),
+        .kill_id_i      ('0),
+        .x_fifo_res_o   (vpu_fifo_res),
+        .fu_valu        (if_wrapper_exe_valu),
+        .fu_vlsu        (if_wrapper_exe_vlsu),
+        .fu_vsld        (if_wrapper_exe_vsld)
     );
 
 endmodule: vpu_control_unit

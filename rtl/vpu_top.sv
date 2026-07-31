@@ -85,6 +85,9 @@ import vpu_pkg::*;
 
     //Interface instance 
     if_xif_exe xif_exe_i ();
+    if_xif_exe xif_exe_valu_i ();
+    // if_xif_exe xif_exe_vlsu_i ();
+    // if_xif_exe xif_exe_vsld_i ();
 
     vpu_control_unit #(
         .NrRgprPorts      (NrRgprPorts),
@@ -99,8 +102,8 @@ import vpu_pkg::*;
         .x_result_t       (x_result_t),
         .registers_t      (registers_t)
     ) i_vpu_control_unit (
-        .clk_i            (clk_i),
-        .rst_ni           (rst_ni),
+        .clk_i               (clk_i),
+        .rst_ni              (rst_ni),
         .x_issue_valid_i     (issue_valid),
         .x_issue_ready_o     (issue_ready),
         .x_issue_req_i       (issue_req),
@@ -113,7 +116,10 @@ import vpu_pkg::*;
         .x_result_valid_o    (result_valid),
         .x_result_ready_i    (result_ready),
         .x_result_o          (result),  
-        .if_wrapper_exe (xif_exe_i.xif_wrapper) 
+        .if_wrapper_exe (xif_exe_i.xif_wrapper), 
+        .if_wrapper_exe_valu (xif_exe_valu_i.xif_wrapper)
+        // .if_wrapper_exe_vlsu (xif_exe_vlsu_i.xif_wrapper),
+        // .if_wrapper_exe_vsld (xif_exe_vsld_i.xif_wrapper)
     );
 
     execution_units execution_units_i 
@@ -125,6 +131,32 @@ import vpu_pkg::*;
         // .result_valid_i (result_valid)
     );
 
+    execution_units valu_i 
+    (
+        .clk_i,
+        .rst_ni,
+        .if_exe_wrapper (xif_exe_valu_i.exe_unit)
+        // .instr_accept_o (instr_accept),  // TODO: assign
+        // .result_valid_i (result_valid)
+    );
+
+    // execution_units vlsu_i 
+    // (
+    //     .clk_i,
+    //     .rst_ni,
+    //     .if_exe_wrapper (xif_exe_vlsu_i.exe_unit)
+    //     // .instr_accept_o (instr_accept),  // TODO: assign
+    //     // .result_valid_i (result_valid)
+    // );
+
+    // execution_units vsld_i 
+    // (
+    //     .clk_i,
+    //     .rst_ni,
+    //     .if_exe_wrapper (xif_exe_vsld_i.exe_unit)
+    //     // .instr_accept_o (instr_accept),  // TODO: assign
+    //     // .result_valid_i (result_valid)
+    // );
 
 /////// User ////////////
 /*

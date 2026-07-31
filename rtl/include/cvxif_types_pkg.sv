@@ -92,8 +92,8 @@ package cvxif_types_pkg;
     // FIFO result packed signals  
     typedef struct packed{
         logic [X_RFW_WIDTH     -1:0]    result_data_exec_o;  // Result data from execution block
-        logic                           result_valid_exec_o; // Result valid from execution block //TODO: not necessary
-        x_issue_t                       issue_exec_o;        //Output from execution block
+        logic                           result_valid_exec_o; // Result valid from execution block 
+        x_issue_t                       issue_exec_o;        // Output from execution block
     }x_issue_fifo_res_t; 
 
 endpackage

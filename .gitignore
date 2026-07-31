@@ -1,4 +1,6 @@
 *.txt
+rtl/dispatch_old.sv
+rtl/execution_units.sv
 rtl/vpu_fsm.sv
 build/
 sw/build/

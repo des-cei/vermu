@@ -15,12 +15,13 @@ import vpu_pkg::*;
 import rvv_instr_pkg::*;
 #(
     parameter int unsigned       NrRgprPorts                 = 2,
+    parameter  int unsigned      XLEN                        = 32,
     parameter type               hartid_t                    = logic,
     parameter type               id_t                        = logic,
     // parameter type               x_issue_req_t               = logic,
     // parameter type               x_issue_resp_t              = logic,
     // parameter type               x_register_t                = logic,
-    parameter type               registers_t                 = logic [NrRgprPorts-1:0][XLEN-1:0],
+    // parameter type               registers_t                 = logic [NrRgprPorts-1:0][XLEN-1:0],
     parameter type               x_issue_t                   = logic,
     parameter type               vec_instr_e                 = logic
 )(
@@ -36,7 +37,7 @@ import rvv_instr_pkg::*;
     output logic                dec_resp_valid_o,
     // output hartid_t             hartid_o,
     // output id_t                 id_o,
-    output vec_decoded_t        decoded_req_o
+    output vpu_decoded_t        decoded_req_o
     // Todo: register_read
 );
 

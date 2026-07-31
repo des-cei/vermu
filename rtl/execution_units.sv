@@ -13,7 +13,7 @@ import cvxif_types_pkg::*;
     // logic [31:0] alu_result_q;
     x_issue_t    alu_result_q;
     logic        result_valid_q;
-    logic        writeback_busy_q;
+    // logic        writeback_busy_q;
 
     logic        instr_accept;
     
@@ -25,20 +25,21 @@ import cvxif_types_pkg::*;
         alu_result_comb = op1 + op2;
     end
 
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni) begin
-            writeback_busy_q <= 1'b0;
-        end else if (result_valid_q) begin
-            writeback_busy_q <= 1'b0;
-        end else if (instr_accept && if_exe_wrapper.wrapper_exe_instr_issue.resp.writeback) begin
-            writeback_busy_q <= 1'b1;
-        end
-    end
+    // always_ff @(posedge clk_i or negedge rst_ni) begin
+    //     if (!rst_ni) begin
+    //         writeback_busy_q <= 1'b0;
+    //     end else if (result_valid_q) begin
+    //         writeback_busy_q <= 1'b0;
+    //     end else if (instr_accept && if_exe_wrapper.wrapper_exe_instr_issue.resp.writeback) begin
+    //         writeback_busy_q <= 1'b1;
+    //     end
+    // end
 
     // Instruction accepted from XIF_wrapper
     assign instr_accept = if_exe_wrapper.wrapper_exe_instr_valid &&
-                           if_exe_wrapper.wrapper_exe_recv_result_ready &&
-                           (!if_exe_wrapper.wrapper_exe_instr_issue.resp.writeback || !writeback_busy_q);
+                        //    if_exe_wrapper.wrapper_exe_recv_result_ready &&
+                        //    (!if_exe_wrapper.wrapper_exe_instr_issue.resp.writeback || !writeback_busy_q);
+                        if_exe_wrapper.wrapper_exe_recv_result_ready;
 
     // Shift register for instruction execution simulation
     shift_register #(
@@ -71,13 +72,14 @@ import cvxif_types_pkg::*;
     // end
 
     // Output to wrapper
-    assign if_exe_wrapper.exe_wrapper_recv_instr_ready             = result_valid_q;
+    // assign if_exe_wrapper.exe_wrapper_recv_instr_ready             = result_valid_q;
+    assign if_exe_wrapper.exe_wrapper_recv_instr_ready             = 1'b1;
     assign if_exe_wrapper.exe_wrapper_result.result_valid_exec_o   = result_valid_q;
     assign if_exe_wrapper.exe_wrapper_result.result_data_exec_o    = alu_result_comb;
     assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.req      = if_exe_wrapper.wrapper_exe_instr_issue.req;
     assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.resp     = if_exe_wrapper.wrapper_exe_instr_issue.resp;
-    assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.register = '0;
-
+    // assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.register = '0;
+    assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.register = alu_result_q.register;
 
     //Testing assignment
     // assign instr_accept_o = instr_accept;
