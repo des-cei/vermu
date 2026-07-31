@@ -1,7 +1,10 @@
-// Copyright 2024 CEIMM-UPM
+// Copyright 2026 CEIMM-UPM
 // Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
-// Ane Corral (ane.corral@upm.es)
+//
+// Based on xif_wrapper.sv from the INTERA-GROUP/xif_wrapper project
+// (licensed under the Apache License 2.0).
+// Modifications by Ane Corral (ane.corral@upm.es).
 
 /*
     THINGS TO BEAR IN MIND

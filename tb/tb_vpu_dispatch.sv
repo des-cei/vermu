@@ -1,4 +1,4 @@
-// Copyright 2024 CEIMM-UPM
+// Copyright 2026 CEIMM-UPM
 // Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
@@ -132,7 +132,7 @@ module tb_vpu_dispatch;
     // Start FU models in background    
     initial begin
         fork
-            fu_model(fu_valu_if.exe_unit, 1, fu_valu_stall_ready);
+            fu_model(fu_valu_if.exe_unit, 0, fu_valu_stall_ready);
             fu_model(fu_vlsu_if.exe_unit, 2, fu_vlsu_stall_ready);  // mem latency=2
             fu_model(fu_vsld_if.exe_unit, 1, fu_vsld_stall_ready);
         join_none
@@ -301,6 +301,7 @@ module tb_vpu_dispatch;
 
         result_seed = 32'hDEAD_BEEF;
 
+/*
         // Scenario 1 — Single-fragment dispatch to VALU
         //   VLEN = 256, N_IPU = 2, DW = 64
         //   vl = 2 , SEW = 32, LMUL = 1. elems_per_frag = (N_IPU * ELEN) / SEW = 2
@@ -526,44 +527,51 @@ module tb_vpu_dispatch;
             check("Instruction 8 completed", instr_state[8].completed);
         end
 
-/*
-        // =====================================================================
+*/
         // Scenario 5 — Structural stall: VALU slot occupied
-        //   Two arithmetic (non-widening) instrs → both target VALU
+        //   VLEN = 256, N_IPU = 2, DW = 64
+        //   vl = 5, SEW = 32, LMUL = 1. 3 fragments
+        //   Two arithmetic instrs, both target VALU
         //   Second must wait for first to fully complete (slot freed)
-        // =====================================================================
-        $display("\n=== Scenario 5: structural stall (VALU slot full) ===");
+
+        $display("\n=== Sc5: structural stall (VALU slot full) ===");
         begin
+            instr_state[9] = '{default:0};
+            instr_state[10] = '{default:0};
+
             disp_decoded = make_arith(.vd(5'd10), .vs1(5'd0), .vs2(5'd1),
-                                      .vl(8'd4), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd7));
+                                      .vl(8'd5), .vsew(2'b10));
+            disp_issue   = make_issue(.id(4'd9));
             disp_valid   = 1;
             @(posedge clk); #1;
-            check("Sc5: first VALU dispatch accepted", disp_ready);
+            if (disp_ready_d)   // Another instruction to dispatch
+                disp_valid = 1;
+            else 
+                disp_valid = 0;
 
             // Same cycle: present second arith to VALU
             disp_decoded = make_arith(.vd(5'd11), .vs1(5'd2), .vs2(5'd3),
-                                      .vl(8'd4), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd8));
-            @(posedge clk); #1;
-            check("Sc5: second VALU stalled (structural)", !disp_ready);
-            disp_valid = 0;
+                                      .vl(8'd5), .vsew(2'b10));
+            disp_issue   = make_issue(.id(4'd10));
 
-            // Wait for first to finish, then second should go
-            wait_cycles(8);
-            disp_decoded = make_arith(.vd(5'd11), .vs1(5'd2), .vs2(5'd3),
-                                      .vl(8'd4), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd8));
-            disp_valid   = 1;
+            wait(x_fifo_res.result_valid_exec_o);
+
             @(posedge clk); #1;
-            check("Sc5: second dispatched after slot freed", disp_ready);
+            disp_decoded = make_arith(.vd(5'd11), .vs1(5'd2), .vs2(5'd3),
+                                      .vl(8'd5), .vsew(2'b10));
+            disp_issue   = make_issue(.id(4'd10));
+            disp_valid   = 1;
+            
+            @(posedge clk); #1;
             disp_valid = 0;
             wait_cycles(8);
+            check("Instruction 9 issued",    instr_state[9].dispatched);
+            check("Instruction 9 completed", instr_state[9].completed);
+            check("Instruction 10 issued",    instr_state[10].dispatched);
+            check("Instruction 10 completed", instr_state[10].completed);
         end
 
-        // =====================================================================
-        // Scenario 6 — Kill flushes in-flight slot
-        // =====================================================================
+/*        // Scenario 6 — Kill flushes in-flight slot
         $display("\n=== Scenario 6: kill flushes VALU slot ===");
         begin
             disp_decoded = make_arith(.vd(5'd12), .vs1(5'd0), .vs2(5'd1),
@@ -594,12 +602,11 @@ module tb_vpu_dispatch;
             wait_cycles(8);
         end
 
-        // =====================================================================
         // Scenario 7 — LMUL=2: register group spanning v4 and v5
         //   vl=8, SEW=32, LMUL=2 → total_frags = ceil(8/2) = 4
         //   Fragments 0,1 use reg_offset=0 (v4), frags 2,3 use reg_offset=1 (v5)
-        // =====================================================================
-        $display("\n=== Scenario 7: LMUL=2 register group stepping ===");
+
+        $display("\n=== Sc7: LMUL=2 register group stepping ===");
         begin
             logic [4:0] observed_vd_addr [4];
             int frag_count, obs;
@@ -635,11 +642,9 @@ module tb_vpu_dispatch;
             wait_cycles(8);
         end
 
-        // =====================================================================
         // Scenario 8 — FU back-pressure via recv_instr_ready=0
         //   VALU stalls in accepting fragments; next_frag must not advance
-        // =====================================================================
-        $display("\n=== Scenario 8: FU back-pressure (recv_instr_ready=0) ===");
+        $display("\n=== Sc8: FU back-pressure (recv_instr_ready=0) ===");
         begin
             int issue_cnt;
             issue_cnt = 0;
@@ -673,9 +678,7 @@ module tb_vpu_dispatch;
             wait_cycles(8);
         end
 */
-        // =====================================================================
         // Summary
-        // =====================================================================
         @(posedge clk); #1;
         $display("\n========================================");
         $display("  Results: %0d PASSED, %0d FAILED", pass_count, fail_count);

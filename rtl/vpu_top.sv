@@ -1,4 +1,4 @@
-// Copyright 2024 CEIMM-UPM
+// Copyright 2026 CEIMM-UPM
 // Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
@@ -122,14 +122,14 @@ import vpu_pkg::*;
         // .if_wrapper_exe_vsld (xif_exe_vsld_i.xif_wrapper)
     );
 
-    execution_units execution_units_i 
-    (
-        .clk_i,
-        .rst_ni,
-        .if_exe_wrapper (xif_exe_i.exe_unit)
-        // .instr_accept_o (instr_accept),  // TODO: assign
-        // .result_valid_i (result_valid)
-    );
+    // execution_units execution_units_i 
+    // (
+    //     .clk_i,
+    //     .rst_ni,
+    //     .if_exe_wrapper (xif_exe_i.exe_unit)
+    //     // .instr_accept_o (instr_accept),  // TODO: assign
+    //     // .result_valid_i (result_valid)
+    // );
 
     execution_units valu_i 
     (
