@@ -7,6 +7,4 @@ sw/build/
 tb/*.do
 !tb/wave_automatize.do
 tb/env.sh
-tb/tb_xif_decoder.sv
-tb/tb_decoder.sv
 transcript
