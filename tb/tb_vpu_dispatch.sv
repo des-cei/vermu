@@ -11,12 +11,7 @@ import vpu_pkg::*;
 
 module tb_vpu_dispatch;
 
-    // Parameters
-    localparam int unsigned VLEN      = 256;
-    localparam int unsigned N_IPU     = 2;      // VLEN / (N_IPU * ELEN) = 2 fragments per register
-    localparam int unsigned LMUL_MAX  = 8;
-    localparam int unsigned FRAG_MAX  = N_IPU * LMUL_MAX;  // 32 // TODO: not accurate. Modify form 'vpu_pkg.sv'
-    localparam int          CLK_HALF  = 5;      // 10 ns period
+    localparam int          CLK_HALF  = 5;      
 
     // Clock and reset
     logic clk, rst_n;
@@ -26,7 +21,7 @@ module tb_vpu_dispatch;
     // DUT ports
     logic         disp_valid;
     vpu_decoded_t disp_decoded;
-    x_issue_t     disp_issue;
+    vpu_issue_t   disp_issue;
     logic         disp_ready;
 
     logic                       kill_valid;
@@ -75,7 +70,7 @@ module tb_vpu_dispatch;
         input logic                  stall_ready_sig  // reference to stall control
     );
 
-        vpu_issue_t current_issue;
+        vpu_compl_issue_t current_issue;
        
         logic busy;
         int   cycles_left;
@@ -164,8 +159,8 @@ module tb_vpu_dispatch;
         d.uses_vs2    = uses_vs2;
         d.uses_vd_src = uses_vd_src;
         d.vl          = vl;
-        d.vsew        = sew_e'(vsew);
-        d.vlmul       = lmul_e'(vlmul);
+        d.vtype.vsew        = sew_e'(vsew);
+        d.vtype.vlmul       = lmul_e'(vlmul);
         return d;
     endfunction
 
@@ -181,8 +176,8 @@ module tb_vpu_dispatch;
         d.vd          = vd;
         d.is_load     = 1'b1;
         d.vl          = vl;
-        d.vsew        = sew_e'(vsew);
-        d.vlmul       = lmul_e'(vlmul);
+        d.vtype.vsew        = sew_e'(vsew);
+        d.vtype.vlmul       = lmul_e'(vlmul);
         return d;
     endfunction
 
@@ -220,9 +215,9 @@ module tb_vpu_dispatch;
         input int           timeout_cy = 20
     );
         int cy;
-        disp_decoded = dec;
-        disp_issue   = issue;
-        disp_valid   = 1;
+        disp_decoded            = dec;
+        disp_issue.instr_issue  = issue;
+        disp_valid              = 1;
         cy = 0;
         while (!disp_ready && cy < timeout_cy) begin
             @(posedge clk); #1;
@@ -301,7 +296,7 @@ module tb_vpu_dispatch;
 
         result_seed = 32'hDEAD_BEEF;
 
-/*
+
         // Scenario 1 — Single-fragment dispatch to VALU
         //   VLEN = 256, N_IPU = 2, DW = 64
         //   vl = 2 , SEW = 32, LMUL = 1. elems_per_frag = (N_IPU * ELEN) / SEW = 2
@@ -337,9 +332,9 @@ module tb_vpu_dispatch;
 
             dec = make_arith(.vd(5'd4), .vs1(5'd0), .vs2(5'd1), .vl(8'd6), .vsew(2'b10));
             issue = make_issue(.id(4'd2));
-            disp_decoded = dec;
-            disp_issue   = issue;
-            disp_valid   = 1;
+            disp_decoded            = dec;
+            disp_issue.instr_issue  = issue;
+            disp_valid              = 1;
 
             @(posedge clk); #1;
             disp_valid = 0;
@@ -363,7 +358,7 @@ module tb_vpu_dispatch;
             instr_state[4] = '{default:0};
 
             disp_decoded = make_load(.vd(5'd5), .vl(8'd3), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd3), .rs_valid(3'd7));  // TODO: rs_valid value
+            disp_issue.instr_issue   = make_issue(.id(4'd3), .rs_valid(3'd7));  // TODO: rs_valid value
             disp_valid   = 1;
 
             @(posedge clk); #1; 
@@ -376,7 +371,7 @@ module tb_vpu_dispatch;
             // Should stall until VLSU writes frag 0 of v5
             disp_decoded = make_arith(.vd(5'd6), .vs1(5'd5), .vs2(5'd1),
                                       .vl(8'd3), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd4), .rs_valid(3'd7)); // TODO: doubt of rs_valid value
+            disp_issue.instr_issue   = make_issue(.id(4'd4), .rs_valid(3'd7)); // TODO: doubt of rs_valid value
 
             @(posedge clk); #1;
             disp_valid = 0;  // No more instructions left
@@ -404,7 +399,7 @@ module tb_vpu_dispatch;
             instr_state[4] = '{default:0};
             
             disp_decoded = make_load(.vd(5'd5), .vl(8'd7), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd3), .rs_valid(3'd7));  // TODO: rs_valid value
+            disp_issue.instr_issue   = make_issue(.id(4'd3), .rs_valid(3'd7));  // TODO: rs_valid value
             disp_valid   = 1;
 
             @(posedge clk); #1;
@@ -417,7 +412,7 @@ module tb_vpu_dispatch;
             // Should stall until VLSU writes frag 0 of v5
             disp_decoded = make_arith(.vd(5'd6), .vs1(5'd5), .vs2(5'd1),
                                       .vl(8'd7), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd4), .rs_valid(3'd7)); // TODO: rs_valid value
+            disp_issue.instr_issue   = make_issue(.id(4'd4), .rs_valid(3'd7)); // TODO: rs_valid value
 
             @(posedge clk); #1;
             disp_valid   = 0; // No more instructions left
@@ -444,7 +439,7 @@ module tb_vpu_dispatch;
             // First instruction to VALU writing v8
             disp_decoded = make_arith(.vd(5'd8), .vs1(5'd6), .vs2(5'd7),
                                       .vl(8'd4), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd5));
+            disp_issue.instr_issue   = make_issue(.id(4'd5));
             disp_valid   = 1;
             @(posedge clk); #1;
             if (disp_ready_d)   // Another instruction to dispatch
@@ -455,7 +450,7 @@ module tb_vpu_dispatch;
             // Second instruction writing same vd = v8 — must not dispatch
             disp_decoded = make_arith(.vd(5'd8), .vs1(5'd2), .vs2(5'd3),
                                       .vl(8'd4), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd6));
+            disp_issue.instr_issue   = make_issue(.id(4'd6));
 
             wait(x_fifo_res.result_valid_exec_o);
 
@@ -463,7 +458,7 @@ module tb_vpu_dispatch;
             // Now second should dispatch. After first alu valid.
             disp_decoded = make_arith(.vd(5'd8), .vs1(5'd2), .vs2(5'd3),
                                       .vl(8'd4), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd6));
+            disp_issue.instr_issue   = make_issue(.id(4'd6));
             disp_valid   = 1;
 
             @(posedge clk); #1;
@@ -492,7 +487,7 @@ module tb_vpu_dispatch;
             // P: vadd writing v9. VALU
             disp_decoded = make_arith(.vd(5'd9), .vs1(5'd1), .vs2(5'd2),
                                       .vl(8'd4), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd7));
+            disp_issue.instr_issue   = make_issue(.id(4'd7));
             disp_valid   = 1;
 
             @(posedge clk); #1;
@@ -503,7 +498,7 @@ module tb_vpu_dispatch;
  
             // Q: vle32 writing v9. VLSU slot is free. Should dispatch.
             disp_decoded = make_load(.vd(5'd9), .vl(8'd4), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd8));
+            disp_issue.instr_issue   = make_issue(.id(4'd8));
 
             @(posedge clk); #1;
             disp_valid = 0;
@@ -527,7 +522,7 @@ module tb_vpu_dispatch;
             check("Instruction 8 completed", instr_state[8].completed);
         end
 
-*/
+
         // Scenario 5 — Structural stall: VALU slot occupied
         //   VLEN = 256, N_IPU = 2, DW = 64
         //   vl = 5, SEW = 32, LMUL = 1. 3 fragments
@@ -541,7 +536,7 @@ module tb_vpu_dispatch;
 
             disp_decoded = make_arith(.vd(5'd10), .vs1(5'd0), .vs2(5'd1),
                                       .vl(8'd5), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd9));
+            disp_issue.instr_issue   = make_issue(.id(4'd9));
             disp_valid   = 1;
             @(posedge clk); #1;
             if (disp_ready_d)   // Another instruction to dispatch
@@ -552,14 +547,14 @@ module tb_vpu_dispatch;
             // Same cycle: present second arith to VALU
             disp_decoded = make_arith(.vd(5'd11), .vs1(5'd2), .vs2(5'd3),
                                       .vl(8'd5), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd10));
+            disp_issue.instr_issue   = make_issue(.id(4'd10));
 
             wait(x_fifo_res.result_valid_exec_o);
 
             @(posedge clk); #1;
             disp_decoded = make_arith(.vd(5'd11), .vs1(5'd2), .vs2(5'd3),
                                       .vl(8'd5), .vsew(2'b10));
-            disp_issue   = make_issue(.id(4'd10));
+            disp_issue.instr_issue   = make_issue(.id(4'd10));
             disp_valid   = 1;
             
             @(posedge clk); #1;

@@ -28,7 +28,7 @@ package vpu_pkg;
     // typedef logic [31:0] elen_t;    
     
     // Number of bits in a vector register (in each of 32 registers). Min 32. [STATIC]
-    localparam int unsigned VPU_VLEN = 256; //128;	             
+    localparam int unsigned VPU_VLEN = 128; //128;	             
     
     // Number of Integer  Processing Units [STATIC]
     localparam int unsigned VPU_N_IPU = 2;	             
@@ -38,8 +38,9 @@ package vpu_pkg;
     
     // typedef logic [VPU_VLEN-1:0] vlen_t;                    
 
-    // localparam int unsigned VLENB = VPU_VLEN / 8; 
-                   
+    localparam int unsigned VLENB = VPU_VLEN / 8; 
+    localparam int unsigned VLENB_W = $clog2(VPU_VLEN / 8 + 1); 
+                  
     // // Selected element width [DYNAMIC]
     // localparam int unsigned SEW = 32; 	
 
@@ -50,7 +51,8 @@ package vpu_pkg;
     // typedef logic[$clog2(NRVREG)-1:0] addr_t;
 	
     // Maximum vector length in elements 
-    localparam int unsigned MAXVL  = VPU_VLEN / 8; 
+    localparam int unsigned MAXVL  = VPU_VLEN * 8 / 8; // (VPU_VLEN * LMUL_MAX) / MIN_SEW
+    localparam int unsigned MAXVL_W   = $clog2(MAXVL + 1);
 
     typedef logic [$clog2(MAXVL+1)-1:0] vl_t;      
 
@@ -89,13 +91,31 @@ package vpu_pkg;
     typedef enum logic [2:0] {
         FMT_OPIVV        = 3'b000, 
         FMT_OPFVV_CSRRW  = 3'b001,     //--N/A
-        FMT_OPMVV_CSRRS  = 3'b010,     
+        FMT_OPMVV_CSRRS  = 3'b010,     // Used system CSR
         FMT_OPIVI_CSRRC  = 3'b011,     //imm[4:0]
         FMT_OPIVX        = 3'b100,     //GPR x, rs1
         FMT_OPFVF_CSRRWI = 3'b101,     //--N/A
         FMT_OPMVX_CSRRSI = 3'b110,     //GPR x, rs1
         FMT_OPCFG_CSRRCI = 3'b111      //GPR x, rs1 & rs2/imm. 311p. Format under OP-V opcode? vsetvli, vsetvl
     } vec_funct3_e;
+
+    typedef enum logic [11:0] { 
+        CSR_VSTART = 12'h8,
+        CSR_XSAT   = 12'h9,     // -- N/A
+        CSR_VXRM   = 12'hA,     // -- N/A 
+        CSR_VCSR   = 12'hF,     // -- N/A
+        CSR_VL     = 12'hC20,
+        CSR_VTYPE  = 12'hC21,
+        CSR_VLENB  = 12'hC22
+    } csr_addr_e;
+
+    typedef struct packed {
+        logic          vill;
+        logic          vma;
+        logic          vta;
+        sew_e          vsew;
+        lmul_e         vlmul;
+    } vtype_t;
 
     typedef struct packed {
         vec_instr_e    instr_enum;
@@ -128,7 +148,7 @@ package vpu_pkg;
         logic [1:0]    mop;       
         logic [4:0]    umop;      // lumop / sumop
 
-        // category flags -- consumers branch on these, never on raw opcode bits
+        // category flags
         logic          is_arith;
         logic          is_load;
         logic          is_store;
@@ -139,7 +159,7 @@ package vpu_pkg;
         logic          is_narrowing;
         // logic          is_signed;
 
-        // operand-presence flags -- tell the register-read stage what to fetch
+        // operand-presence flags 
         logic          uses_vs1;
         logic          uses_vs2;
         logic          uses_vd_src;     // vd/vs3 also read (macc-style, store data)
@@ -148,8 +168,12 @@ package vpu_pkg;
         logic          uses_imm;
 
         // CSRs information
-        sew_e          vsew;
-        lmul_e         vlmul;
+        // logic          vtype_vill;
+        // logic          vtype_vma;
+        // logic          vtype_vta;
+        // sew_e          vtype_vsew;
+        // lmul_e         vtype_vlmul;
+        vtype_t        vtype;
         vl_t           vl;
     } vpu_decoded_t;
 
@@ -192,19 +216,24 @@ package vpu_pkg;
     // XIF Interface //
     ///////////////////
 
+    typedef struct packed {
+        x_issue_t instr_issue;
+        vec_instr_e vec_instr; 
+    } vpu_issue_t;
+
     // Complementary VPU fields for 'wrapper_exe_instr_issue'
     // Dispatched issue
     typedef struct packed {
         x_issue_t            instr_issue;      // instruction issued
-        vpu_decoded_t        instr_decoded;    // issue decoded
-        dispatch_sideband_t  instr_fragment;
-    } vpu_issue_t;
+        vpu_decoded_t        instr_decoded;    // Added issue decoded
+        dispatch_sideband_t  instr_fragment;   // Added
+    } vpu_compl_issue_t;
 
     // Complementary VPU fields for 'exe_wrapper_result'
     typedef struct packed {
         x_issue_fifo_res_t   xif_fifo_result;
-        vpu_decoded_t        instr_decoded;    // issue decoded
-        dispatch_sideband_t  instr_fragment;
+        vpu_decoded_t        instr_decoded;    // Added issue decoded
+        dispatch_sideband_t  instr_fragment;   // Added
     } vpu_issue_fifo_res_t;
 
 

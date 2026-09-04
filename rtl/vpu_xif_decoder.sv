@@ -9,8 +9,6 @@
 //    vop.v, vwop, vnop, load/store segment (7.8)
 //  - Check validity of parameter dependant instructions (Done example: vmv1r.v, vmv2r.v, etc.)
 //  - Check validity of SEW/EEW/LMUL conditions (specially in wide/narrow instructions) ?
-//    That validity of instruction should condition xif_issue_resp.accept?
-//  - Writeback: CSRs read instructions
 
 module vpu_xif_decoder
 import rvv_instr_pkg::*;
@@ -380,9 +378,17 @@ import vpu_pkg::*;
                 // Vector configuration: vsetvli / vsetivli / vsetvl
                 FMT_OPCFG_CSRRCI: begin
                     unique casez (instr_i[31:25])
-                        7'b0??????: begin vec_instr_o = VSETVLI;  x_issue_resp_o.accept = 1'b1; x_issue_resp_o.writeback = 1'b1; x_issue_resp_o.register_read = {1'b0, 1'b1}; end // TODO: vill
-                        7'b11?????: begin vec_instr_o = VSETIVLI; x_issue_resp_o.accept = 1'b1; x_issue_resp_o.writeback = 1'b1; end                                // TODO: vill
-                        7'b1000000: begin vec_instr_o = VSETVL;   x_issue_resp_o.accept = 1'b1; x_issue_resp_o.writeback = 1'b1; x_issue_resp_o.register_read = {1'b1, 1'b1}; end // TODO: vill
+                        7'b0??????: begin vec_instr_o = VSETVLI;  x_issue_resp_o.accept = 1'b1;
+                                    if(!(instr_i[19:15] == '0) && !(instr_i[11:7] == '0))begin
+                                        x_issue_resp_o.writeback = 1'b1;
+                                    end 
+                                    x_issue_resp_o.register_read = {1'b0, 1'b1}; end 
+                        7'b11?????: begin vec_instr_o = VSETIVLI; x_issue_resp_o.accept = 1'b1; x_issue_resp_o.writeback = 1'b1; end                                
+                        7'b1000000: begin vec_instr_o = VSETVL;   x_issue_resp_o.accept = 1'b1;
+                                    if(!(instr_i[19:15] == '0) && !(instr_i[11:7] == '0))begin
+                                        x_issue_resp_o.writeback = 1'b1;
+                                    end 
+                                    x_issue_resp_o.register_read = {1'b1, 1'b1}; end 
                         default: ;
                     endcase
                 end

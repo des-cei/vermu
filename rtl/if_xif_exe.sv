@@ -12,11 +12,11 @@ import vpu_pkg::*;
 interface if_xif_exe;
 
     // instruction issue signal
-    logic              wrapper_exe_instr_valid;      // instruction valid
-    vpu_issue_t        wrapper_exe_instr_issue;
-    logic              exe_wrapper_recv_instr_ready; // exe block is ready to receive new instruction
-
-    logic              wrapper_exe_recv_result_ready;// ready to receive result
+    logic                wrapper_exe_instr_valid;      // instruction valid
+    vpu_compl_issue_t    wrapper_exe_instr_issue;
+    logic                exe_wrapper_recv_instr_ready; // exe block is ready to receive new instruction
+  
+    logic                wrapper_exe_recv_result_ready;// ready to receive result
     vpu_issue_fifo_res_t exe_wrapper_result;
 
     modport exe_unit (    // Execution unit point of view

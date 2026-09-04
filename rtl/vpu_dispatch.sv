@@ -11,15 +11,16 @@ module vpu_dispatch
     input  logic rst_ni,
     input  logic                       disp_valid_i,     // head entry ready to dispatch
     input  vpu_decoded_t               disp_decoded_i,   // decoded fields
-    input  x_issue_t                   disp_issue_i,     // CV-X-IF 
+    input  vpu_issue_t                 disp_issue_i,     // CV-X-IF 
     output logic                       disp_ready_o,     // pop instr_fifo 
     input  logic                       kill_valid_i,
     input  logic [X_HARTID_WIDTH-1:0]  kill_hartid_i,
     input  logic [X_ID_WIDTH-1:0]      kill_id_i,
+    input  logic                       x_fifo_res_full_i,
     output x_issue_fifo_res_t          x_fifo_res_o,     // To result_fifo
-    if_xif_exe.xif_wrapper              fu_valu,         // slot FU_VALU=0
-    if_xif_exe.xif_wrapper              fu_vlsu,         // slot FU_VLSU=1
-    if_xif_exe.xif_wrapper              fu_vsld          // slot FU_VSLD=2
+    if_xif_exe.xif_wrapper             fu_valu,         // slot FU_VALU=0
+    if_xif_exe.xif_wrapper             fu_vlsu,         // slot FU_VLSU=1
+    if_xif_exe.xif_wrapper             fu_vsld          // slot FU_VSLD=2
 );
 
     // In-flight slot definition
@@ -47,7 +48,7 @@ module vpu_dispatch
 
     // Issue outputs to FUs
     logic [MAX_INFLIGHT-1:0]   fu_instr_valid;      
-    vpu_issue_t [MAX_INFLIGHT-1:0] fu_instr_issue;
+    vpu_compl_issue_t [MAX_INFLIGHT-1:0] fu_instr_issue;
 
     // FU inputs back to dispatcher
     logic [MAX_INFLIGHT-1:0]                fu_recv_instr_ready; // FU ready for next fragment
@@ -56,21 +57,21 @@ module vpu_dispatch
     // VALU 
     assign fu_valu.wrapper_exe_instr_valid       = fu_instr_valid[FU_VALU];
     assign fu_valu.wrapper_exe_instr_issue       = fu_instr_issue[FU_VALU];
-    assign fu_valu.wrapper_exe_recv_result_ready = 1'b1; 
+    assign fu_valu.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i; 
     assign fu_recv_instr_ready[FU_VALU]          = fu_valu.exe_wrapper_recv_instr_ready;
     assign fu_result[FU_VALU]                    = fu_valu.exe_wrapper_result;
 
     // VLSU 
     assign fu_vlsu.wrapper_exe_instr_valid       = fu_instr_valid[FU_VLSU];
     assign fu_vlsu.wrapper_exe_instr_issue       = fu_instr_issue[FU_VLSU];
-    assign fu_vlsu.wrapper_exe_recv_result_ready = 1'b1;
+    assign fu_vlsu.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i;
     assign fu_recv_instr_ready[FU_VLSU]          = fu_vlsu.exe_wrapper_recv_instr_ready;
     assign fu_result[FU_VLSU]                    = fu_vlsu.exe_wrapper_result;
 
     // VSLD 
     assign fu_vsld.wrapper_exe_instr_valid       = fu_instr_valid[FU_VSLD];
     assign fu_vsld.wrapper_exe_instr_issue       = fu_instr_issue[FU_VSLD];
-    assign fu_vsld.wrapper_exe_recv_result_ready = 1'b1;
+    assign fu_vsld.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i;
     assign fu_recv_instr_ready[FU_VSLD]          = fu_vsld.exe_wrapper_recv_instr_ready;
     assign fu_result[FU_VSLD]                    = fu_vsld.exe_wrapper_result;
 
@@ -89,7 +90,7 @@ module vpu_dispatch
             3'd2:    epf = FRAG_CNT_W'(DW / 32);  // SEW=32
             default: epf = FRAG_CNT_W'(DW / 32);  // default: SEW=32
         endcase
-        if (epf == '0) epf = 1;  
+        if (epf == '0) epf = 1;  // TODO: not real
         tf        = (FRAG_CNT_W'(vl) + epf - 1) / epf;
 
         // $display(
@@ -291,7 +292,7 @@ module vpu_dispatch
             logic [4:0]          vs1_addr, vs2_addr, vd_addr;
 
             slot_issue_en[i] = slot_q[i].valid
-                             && (slot_q[i].next_frag < slot_q[i].total_frags)   
+                             && (slot_q[i].next_frag < slot_q[i].total_frags)
                              && !slot_hazard[i]
                              && fu_recv_instr_ready[i];
 
@@ -356,7 +357,10 @@ module vpu_dispatch
     //     end
 
         // dispatch_fire = disp_valid_i && new_slot_free && !new_waw;
-        dispatch_fire = disp_valid_i && new_slot_free;
+        // dispatch_fire = disp_valid_i && new_slot_free;
+        dispatch_fire = disp_valid_i && new_slot_free && 
+                        ((disp_decoded_i.fmt != FMT_OPCFG_CSRRCI) && (disp_decoded_i.major_opcode == OPCODE_OP_V)) &&
+                        (disp_decoded_i.major_opcode != OPCODE_SYSTEM);
     end
 
     assign disp_ready_o = dispatch_fire;
@@ -413,8 +417,8 @@ module vpu_dispatch
         if (dispatch_fire) begin
             logic [3:0] lv;
             logic [2:0] vsew;
-            lv   = vlmul_to_val(disp_decoded_i.vlmul);
-            vsew = disp_decoded_i.vsew;
+            lv   = vlmul_to_val(disp_decoded_i.vtype.vlmul); // Considers CSRs?
+            vsew = disp_decoded_i.vtype.vsew;
 
             slot_d[new_fu_id].valid          = 1'b1;
             slot_d[new_fu_id].vd_base        = disp_decoded_i.vd;
@@ -428,10 +432,10 @@ module vpu_dispatch
             slot_d[new_fu_id].uses_vd_src    = disp_decoded_i.uses_vd_src;
             slot_d[new_fu_id].next_frag      = '0;
             slot_d[new_fu_id].frag_done_mask = '0;
-            slot_d[new_fu_id].hart_id        = disp_issue_i.req.hartid;
-            slot_d[new_fu_id].x_id           = disp_issue_i.req.id;
+            slot_d[new_fu_id].hart_id        = disp_issue_i.instr_issue.req.hartid;
+            slot_d[new_fu_id].x_id           = disp_issue_i.instr_issue.req.id;
             slot_d[new_fu_id].decoded        = disp_decoded_i;
-            slot_d[new_fu_id].issue_meta     = disp_issue_i;
+            slot_d[new_fu_id].issue_meta     = disp_issue_i.instr_issue;
         end
 
         // Kill — clear all slots matching hart_id 

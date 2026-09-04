@@ -1,6 +1,11 @@
+// Emulation of execution units to respond the XIF interface when 
+// performing vector instructions.
+
 module execution_units
 import cvxif_types_pkg::*;
-(
+#(
+    CYCLES =    4
+)(
     // Clock and Reset
     input logic clk_i,
     input logic rst_ni,
@@ -43,6 +48,7 @@ import cvxif_types_pkg::*;
 
     // Shift register for instruction execution simulation
     shift_register #(
+        .CYCLES (CYCLES),
         .data_t (x_issue_t)
     ) shift_Register_i (
         .clk_i,
@@ -50,7 +56,7 @@ import cvxif_types_pkg::*;
         .en_i (1'b1),
 
         .bit_i(instr_accept),
-        .data_i(if_exe_wrapper.wrapper_exe_instr_issue),
+        .data_i(if_exe_wrapper.wrapper_exe_instr_issue.instr_issue),
         
         .bit_o(result_valid_q),
         .data_o(alu_result_q)
@@ -74,12 +80,15 @@ import cvxif_types_pkg::*;
     // Output to wrapper
     // assign if_exe_wrapper.exe_wrapper_recv_instr_ready             = result_valid_q;
     assign if_exe_wrapper.exe_wrapper_recv_instr_ready             = 1'b1;
-    assign if_exe_wrapper.exe_wrapper_result.result_valid_exec_o   = result_valid_q;
-    assign if_exe_wrapper.exe_wrapper_result.result_data_exec_o    = alu_result_comb;
-    assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.req      = if_exe_wrapper.wrapper_exe_instr_issue.req;
-    assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.resp     = if_exe_wrapper.wrapper_exe_instr_issue.resp;
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_valid_exec_o   = result_valid_q;
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o    = alu_result_comb;
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.req      = if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.req;
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.resp     = if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.resp;
     // assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.register = '0;
-    assign if_exe_wrapper.exe_wrapper_result.issue_exec_o.register = alu_result_q.register;
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.register = alu_result_q.register;
+
+    assign if_exe_wrapper.exe_wrapper_result.instr_decoded = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded;
+    assign if_exe_wrapper.exe_wrapper_result.instr_fragment= if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
 
     //Testing assignment
     // assign instr_accept_o = instr_accept;

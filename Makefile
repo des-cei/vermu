@@ -48,7 +48,7 @@ OBJ := sw/build/main.o
 WAVE_DO ?= tb/wave.do
 MARCH := rv32imc_zve32x_zvl128b
 MABI := ilp32
-CFLAGS := -O2 -march=$(MARCH) -mabi=$(MABI) -I$(PROJECT_DIR)
+CFLAGS := -O2 -march=$(MARCH) -mabi=$(MABI) -I$(PROJECT_DIR) -Isw/include
 
 
 .PHONY: all help check-tools build-sw build-sim run-vpu-unit run-vpu-unit-gui run-questa-tb run-questa-tb-gui
@@ -57,17 +57,18 @@ all: run-vpu-unit
 
 help:
 	@echo "Targets:"
-	@echo "  build-sw            Build sw/build/main.S from sw/<PROJECT>/main.c"
-	@echo "  build-sim           Run FuseSoC to elaborate the sim target (Questa)"
-	@echo "  run-vpu-unit        Run VPU unit test in CLI"
-	@echo "  run-vpu-unit-gui    Run VPU unit test in GUI"
-	@echo "  run-questa-tb       Run a module-level TB in CLI"
-	@echo "  run-questa-tb-gui   Run a module-level TB in GUI"
-	@echo "Variables:"
-	@echo "  PROJECT=<name>      Software project under sw/"
-	@echo "  TB_TOP=<module>     Testbench top module name"
-	@echo "  TB_FILE=<file>      Testbench source file under tb/"
-	@echo "  QUESTA_LICENSE=<lic> Optional, only if you want to force a license file"
+	@echo "  build-sw            	Build sw/build/main.S from sw/<PROJECT>/main.c"
+	@echo "  build-sim           	Run FuseSoC to elaborate the sim target (Questa)"
+	@echo "  run-vpu-unit        	Run VPU unit test in CLI"
+	@echo "  run-vpu-unit-gui    	Run VPU unit test in GUI"
+	@echo "  run-questa-tb       	Run a module-level TB in CLI"
+	@echo "  run-questa-tb-gui   	Run a module-level TB in GUI"
+	@echo "Variables:"	
+	@echo "  PROJECT=<name>      	Software project under sw/"
+	@echo "  TB_TOP=<module>     	Testbench top module name"
+	@echo "  FUSESOC_TARGET=<name>  vpu-sim for vermu sim"
+	@echo "  TB_FILE=<file>      	Testbench source file under tb/"
+	@echo "  QUESTA_LICENSE=<lic>	Optional, only if you want to force a license file"
 
 check-tools:
 	@echo "Checking tools and their resolved paths:"
@@ -87,6 +88,7 @@ build-sw:
 
 build-sim: check-tools
 	$(FUSESOC) --cores-root . run --target=$(FUSESOC_TARGET) --setup --build $(CORE_NAME)
+	@cat $(SIM_DIR)/transcript
 
 ## Test VPU by injection of certain C application instructions through X-IF
 ## @param PROJECT=<application to test>

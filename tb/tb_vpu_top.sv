@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
+// Stiimulus generator extracts compiled vector instructions and injects them through
+// the X-IF , to see its behaviour
 module tb_vpu_top;
 
     import cvxif_types_pkg::*;
