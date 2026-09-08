@@ -131,24 +131,20 @@ import vpu_pkg::*;
     //     // .result_valid_i (result_valid)
     // );
 
-    execution_units #(
-      .CYCLES(0)
-    ) valu_i 
-    (
-        .clk_i,
-        .rst_ni,
-        .if_exe_wrapper (xif_exe_valu_i.exe_unit)
-        // .instr_accept_o (instr_accept),  // TODO: assign
-        // .result_valid_i (result_valid)
-    );
+    // execution_units #(
+    //   .CYCLES(0)
+    // ) valu_i 
+    // (
+    //     .clk_i,
+    //     .rst_ni,
+    //     .if_exe_wrapper (xif_exe_valu_i.exe_unit)
+    // );
 
     execution_units vlsu_i 
     (
         .clk_i,
         .rst_ni,
         .if_exe_wrapper (xif_exe_vlsu_i.exe_unit)
-        // .instr_accept_o (instr_accept),  // TODO: assign
-        // .result_valid_i (result_valid)
     );
 
     execution_units vsld_i 
@@ -156,8 +152,43 @@ import vpu_pkg::*;
         .clk_i,
         .rst_ni,
         .if_exe_wrapper (xif_exe_vsld_i.exe_unit)
-        // .instr_accept_o (instr_accept),  // TODO: assign
-        // .result_valid_i (result_valid)
+    );
+
+    // vregfile vregfile_i(
+    //     .clk_i       (clk_i),
+    //     .rst_ni      (rst_ni),
+    //     .vpu_req_i   (vpu_req),
+    //     .csr_vtype_i (csr_vtype),  
+    //     .csr_vl_i    (csr_vl),    
+    //     .vstart_i    (csr_vstart),
+    //     .op_valid_i  (vrf_op_valid), 
+    //     .funct3_i    (vpu_req.funct3),
+    //     .waddr_i     (waddr),    
+    //     .we_i        (vrf_we),      
+    //     .wdata_i     (wdata),
+    //     .done_w_o    (done_w),
+    //     .raddr1_i    (raddr1),  
+    //     .raddr2_i    (raddr2),
+    //     .raddr3_i    (vpu_req.vd),  
+    //     .rdata1_o    (vrf_rdata1),  
+    //     .rdata2_o    (vrf_rdata2),
+    //     .rdata3_o    (vrf_vd_data),
+    //     .done_r2_o   (done_r2),
+    //     .mask_o      (mask)  
+    // );
+
+    logic [255:0] vrf_result;
+
+    simd_controller simd_controller_i (
+        .clk_i            (clk_i),
+        .rst_ni           (rst_ni),
+        .op_s1_i          (256'hAAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD33333333444444445555555566666666), //rdata1
+        .op_s2_i          (256'h2222222233333333444444445555555566666666BBBBBBBBCCCCCCCCDDDDDDDD), //vrf_rdata2
+        .op_d_i           ('0), //vrf_vd_data
+        .is_signed_i      ('0), // TODO  
+        .carry_i          ('0), // TODO   
+        .result_o         (vrf_result),  // simd_result
+        .if_exe_wrapper   (xif_exe_valu_i.exe_unit)
     );
 
 /////// User ////////////
@@ -273,45 +304,6 @@ import vpu_pkg::*;
       .lsu_result_valid_o(lsu_result_valid),
       .masters_resp_i    (masters_resp_i[0]),
       .masters_req_o     (masters_req_o[0])
-    );
-
-    vregfile vregfile_i(
-        .clk_i       (clk_i),
-        .rst_ni      (rst_ni),
-        .vpu_req_i   (vpu_req),
-        .csr_vtype_i (csr_vtype),  
-        .csr_vl_i    (csr_vl),    
-        .vstart_i    (csr_vstart),
-        .op_valid_i  (vrf_op_valid), 
-        .funct3_i    (vpu_req.funct3),
-        .waddr_i     (waddr),    
-        .we_i        (vrf_we),      
-        .wdata_i     (wdata),
-        .done_w_o    (done_w),
-        .raddr1_i    (raddr1),  
-        .raddr2_i    (raddr2),
-        .raddr3_i    (vpu_req.vd),  
-        .rdata1_o    (vrf_rdata1),  
-        .rdata2_o    (vrf_rdata2),
-        .rdata3_o    (vrf_vd_data),
-        .done_r2_o   (done_r2),
-        .mask_o      (mask)  
-    );
-
-    simd_controller simd_controller_i (
-        .clk_i            (clk_i),
-        .rst_ni           (rst_ni),
-        .operation_i      (operation),
-        .operation_valid_i(op_valid_simd), 
-        .op_s1_i          (rdata1),
-        .op_s2_i          (vrf_rdata2),
-        .op_d_i           (vrf_vd_data),
-        .is_signed_i      (vpu_req.is_signed), 
-        .carry_i          (1'b0), 
-        .sew_i            (csr_vtype.vsew),   
-        .vl_i             (csr_vl),     
-        .result_o         (simd_result),
-        .result_valid_o   (simd_result_valid)
     );
 
 ////////////////////

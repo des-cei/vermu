@@ -268,9 +268,9 @@ import vpu_pkg::*;
                               disp_ready)
                             && ~fifo_instr_empty;
     // Interface: Execution block <-> FIFO_result
-    // assign if_wrapper_exe_valu.wrapper_exe_recv_result_ready = ~fifo_res_full;
-    // assign if_wrapper_exe_vlsu.wrapper_exe_recv_result_ready = ~fifo_res_full;
-    // assign if_wrapper_exe_vsld.wrapper_exe_recv_result_ready = ~fifo_res_full;
+    // assign if_wrapper_exe_valu.wrapper_exe_recv_result_ready = ~fifo_res_full;      // TODO: possible hazards?
+    // assign if_wrapper_exe_vlsu.wrapper_exe_recv_result_ready = ~fifo_res_full;       // TODO: possible hazards?
+    // assign if_wrapper_exe_vsld.wrapper_exe_recv_result_ready = ~fifo_res_full;       // TODO: possible hazards?
     assign x_fifo_res_i = ((issue_instr_op == VSETVLI) || 
                           (issue_instr_op == VSETIVLI) || 
                           (issue_instr_op == VSETVL)   ||

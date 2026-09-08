@@ -7,7 +7,7 @@
 // The SIMD lane calculates SIMD operations depending on
 // element width.
 
-module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
+module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
     parameter int unsigned Width = 8,                        
 	parameter type         data_t = logic [Width-1:0]
 ) (
@@ -20,7 +20,7 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
     input data_t  op_d_i,
     input logic   is_signed_i,  
     input logic   carry_i,
-	input vsew_e  sew_i,
+	input sew_e  sew_i,
     output data_t result_o,
     output logic  result_valid_o 	
 ); 
@@ -38,18 +38,18 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
     always_comb begin: mult_operands
         mult_op1 = op_s1_i;
         mult_op2 = op_s2_i;
-        if (operation_i inside {VMADD, VNMSUB}) begin
+        if (operation_i inside {OP_VMADD, OP_VNMSUB}) begin
            mult_op1 = op_s1_i;
            mult_op2 = op_d_i;
         end
     end: mult_operands
 
     always_comb begin: multiply
-        is_mult = operation_valid_i && operation_i inside {VMACC, VNMSAC, VMADD, VMUL, VMULH, VMULHU, VMULHSU};
+        is_mult = operation_valid_i && operation_i inside {OP_VMACC, OP_VNMSAC, OP_VMADD, OP_VMUL, OP_VMULH, OP_VMULHU, OP_VMULHSU};
         
         mult_result = '0;
         if (is_mult)
-            mult_result = $signed({mult_op1[Width-1] & is_signed_i & ~(operation_i == VMULHSU), mult_op1}) * $signed({mult_op2[Width-1] & is_signed_i, mult_op2});
+            mult_result = $signed({mult_op1[Width-1] & is_signed_i & ~(operation_i == OP_VMULHSU), mult_op1}) * $signed({mult_op2[Width-1] & is_signed_i, mult_op2});
     end: multiply
 
     ////////////////////////
@@ -65,16 +65,16 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
     always_comb begin : arith_operands
         if(operation_valid_i) 
            unique case (operation_i)   
-                VMACC,
-                VNMSAC: begin
+                OP_VMACC,
+                OP_VNMSAC: begin
                     arith_op1 = mult_result[Width-1:0];                    
                     arith_op2 = op_d_i;
                 end
-                VMADD: begin
+                OP_VMADD: begin
                     arith_op1 = mult_result[Width-1:0];
                     arith_op2 = op_s2_i;
                 end
-                VRSUB: begin
+                OP_VRSUB: begin
                     arith_op1 = op_s2_i;
                     arith_op2 = op_s1_i;
                 end                
@@ -102,23 +102,23 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
     logic [$clog2(Width)-1:0] shift_amount;  
 	    
     always_comb begin : shifter
-        is_shift = operation_valid_i && operation_i inside {VSLL, VSRL,VSRA};
+        is_shift = operation_valid_i && operation_i inside {OP_VSLL, OP_VSRL, OP_VSRA};
         if(is_shift) begin
             if (Width == 32) begin   
                 unique case (sew_i)
                     vpu_pkg::SEW_32: begin
                         shift_amount = op_s1_i[4:0];
-                        if (operation_i == VSRA) shift_operand = $signed(op_s2_i);
+                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i);
                         else shift_operand = $unsigned(op_s2_i);
                     end
                     vpu_pkg::SEW_16: begin
                         shift_amount = op_s1_i[3:0];
-                        if (operation_i == VSRA) shift_operand = $signed(op_s2_i[15:0]);
+                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[15:0]);
                         else shift_operand                     = $unsigned(op_s2_i[Width-1:0]);
                     end
                     default: begin
                         shift_amount = op_s1_i[2:0];
-                        if (operation_i == VSRA) shift_operand = $signed(op_s2_i[15:0]);
+                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[15:0]);
                         else shift_operand = $unsigned(op_s2_i[Width-1:0]);
                     end
                 endcase
@@ -126,19 +126,19 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
                 unique case (sew_i)
                     vpu_pkg::SEW_16: begin
                         shift_amount = op_s1_i[3:0];
-                        if (operation_i == VSRA) shift_operand = $signed(op_s2_i);
+                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i);
                         else shift_operand = $unsigned(op_s2_i);
                     end
                     default: begin
                         shift_amount = op_s1_i[2:0];
-                        if (operation_i == VSRA) shift_operand = $signed(op_s2_i[7:0]);
+                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[7:0]);
                         else shift_operand = $unsigned(op_s2_i[7:0]);
                     end
                 endcase
             end else begin
                 if (op_s1_i > 'd8) shift_amount = 'd8;  
                 else shift_amount = op_s1_i[2:0];
-                if (operation_i == VSRA) shift_operand = $signed(op_s2_i);
+                if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i);
                 else shift_operand = $unsigned(op_s2_i);
             end
         end
@@ -154,7 +154,7 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
     data_t comp_op_2;
     
     always_comb begin: comp_operands
-        if(operation_i inside {VMSGTU, VMSGT, VMSGEU, VMSGE}) begin
+        if(operation_i inside {OP_VMSGTU, OP_VMSGT, OP_VMSGEU, OP_VMSGE}) begin
             comp_op_1 = op_s2_i;
             comp_op_2 = op_s1_i;
         end
@@ -167,10 +167,10 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
     always_comb begin: compare     
         if(operation_valid_i) 
             unique case (operation_i)
-                VMSEQ        : comp_result = ~|subtractor_result;	
-                VMSNE        : comp_result = |subtractor_result; 
-                VMSLTU, VMSLT, VMSGTU, VMSGT: comp_result = is_signed_i ? ($signed(comp_op_2) < $signed(comp_op_1)) : (comp_op_2 < comp_op_1); 
-                VMSLEU, VMSLE, VMSGEU, VMSGE: comp_result = {'0, is_signed_i ? ($signed(comp_op_2) <= $signed(comp_op_1)) : (comp_op_2 <= comp_op_1)};
+                OP_VMSEQ        : comp_result = ~|subtractor_result;	
+                OP_VMSNE        : comp_result = |subtractor_result; 
+                OP_VMSLTU, OP_VMSLT, OP_VMSGTU, OP_VMSGT: comp_result = is_signed_i ? ($signed(comp_op_2) < $signed(comp_op_1)) : (comp_op_2 < comp_op_1); 
+                OP_VMSLEU, OP_VMSLE, OP_VMSGEU, OP_VMSGE: comp_result = {'0, is_signed_i ? ($signed(comp_op_2) <= $signed(comp_op_1)) : (comp_op_2 <= comp_op_1)};
                 default: comp_result = '0;
             endcase
     end: compare
@@ -186,18 +186,18 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
         if (operation_valid_i) begin
             result_valid_o = 1'b1;  
             unique case (operation_i)
-                VADD, VMACC, VMADD, VREDSUM      : simd_result = adder_result[Width-1:0];
-                VSUB, VRSUB, VNMSAC              : simd_result = subtractor_result[Width-1:0];
-                VMIN, VMINU                      : simd_result = $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}) <= $signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) ? op_s1_i : op_s2_i;
-                VMAX, VMAXU                      : simd_result = $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}) > $signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) ? op_s1_i : op_s2_i;
-                VAND                             : simd_result = op_s1_i & op_s2_i;
-                VOR                              : simd_result = op_s1_i | op_s2_i;
-                VXOR                             : simd_result = op_s1_i ^ op_s2_i;
-                VSLL                             : simd_result = shift_operand << shift_amount;
-                VSRL                             : simd_result = shift_operand >> shift_amount;
-                VSRA                             : simd_result = $signed(shift_operand) >>> shift_amount;   
-                VMUL                             : simd_result = mult_result[Width-1:0];
-                VMULH, VMULHU, VMULHSU           : begin
+                OP_VADD, OP_VMACC, OP_VMADD, OP_VREDSUM   : simd_result = adder_result[Width-1:0];
+                OP_VSUB, OP_VRSUB, OP_VNMSAC              : simd_result = subtractor_result[Width-1:0];
+                OP_VMIN, OP_VMINU                         : simd_result = $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}) <= $signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) ? op_s1_i : op_s2_i;
+                OP_VMAX, OP_VMAXU                         : simd_result = $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}) > $signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) ? op_s1_i : op_s2_i;
+                OP_VAND                                   : simd_result = op_s1_i & op_s2_i;
+                OP_VOR                                    : simd_result = op_s1_i | op_s2_i;
+                OP_VXOR                                   : simd_result = op_s1_i ^ op_s2_i;
+                OP_VSLL                                   : simd_result = shift_operand << shift_amount;
+                OP_VSRL                                   : simd_result = shift_operand >> shift_amount;
+                OP_VSRA                                   : simd_result = $signed(shift_operand) >>> shift_amount;   
+                OP_VMUL                                   : simd_result = mult_result[Width-1:0];
+                OP_VMULH, OP_VMULHU, OP_VMULHSU           : begin
                     simd_result = mult_result[2*Width-1:Width];
                     if (Width == 32) begin
                         unique case (sew_i)
@@ -215,10 +215,10 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
                         simd_result = mult_result[15:8];
                     end
                 end
-                VMSEQ, VMSNE,
-                VMSLTU, VMSLT, VMSLEU, VMSLE, 
-                VMSGTU, VMSGT, VMSGEU, VMSGE    : simd_result = comp_result[Width-1:0];		              
-                VMADC                           : simd_result = Width'(adder_result[Width]);				
+                OP_VMSEQ, OP_VMSNE,
+                OP_VMSLTU, OP_VMSLT, OP_VMSLEU, OP_VMSLE, 
+                OP_VMSGTU, OP_VMSGT, OP_VMSGEU, OP_VMSGE    : simd_result = comp_result[Width-1:0];		              
+                OP_VMADC                                    : simd_result = Width'(adder_result[Width]);				
                 default: simd_result = '0;
             endcase 
         end
@@ -226,4 +226,4 @@ module VAU  import vpu_pkg::*; import vector_ops_pkg::*; #(
     
     assign result_o = simd_result;
     
-endmodule : VAU 
+endmodule : vpu_vau 

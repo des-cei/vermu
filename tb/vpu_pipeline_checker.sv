@@ -42,19 +42,19 @@ import vector_ops_pkg::*;
     // Debug hooks directly into the VPU
     input op_e            vpu_dbg_operation_i,
     input logic           vpu_dbg_is_narrowing_i,
-    input logic [VLEN-1:0]   vpu_dbg_rdata1_i,
-    input logic [VLEN-1:0]   vpu_dbg_rdata2_i,
-    input logic [VLEN-1:0]   vpu_dbg_vd_old_i,
+    input logic [VPU_VLEN-1:0]   vpu_dbg_rdata1_i,
+    input logic [VPU_VLEN-1:0]   vpu_dbg_rdata2_i,
+    input logic [VPU_VLEN-1:0]   vpu_dbg_vd_old_i,
     input logic           vpu_dbg_simd_result_valid_i,
-    input logic [VLEN-1:0]   vpu_dbg_result_i
+    input logic [VPU_VLEN-1:0]   vpu_dbg_result_i
 );
 
     typedef struct {
             logic [31:0]  instr;
             op_e          op;
-            logic [VLEN-1:0] v_op1;
-            logic [VLEN-1:0] v_op2;
-            logic [VLEN-1:0] v_vd_old;
+            logic [VPU_VLEN-1:0] v_op1;
+            logic [VPU_VLEN-1:0] v_op2;
+            logic [VPU_VLEN-1:0] v_vd_old;
     } instr_ctx_t;
 
     logic is_narrowing;
@@ -68,10 +68,10 @@ import vector_ops_pkg::*;
         end
     end
 
-    task automatic check_math(logic [31:0] current_instr, op_e current_op, logic [VLEN-1:0] op1,
-                                logic [VLEN-1:0] op2, logic [VLEN-1:0] vd, logic [VLEN-1:0] actual_result);
+    task automatic check_math(logic [31:0] current_instr, op_e current_op, logic [VPU_VLEN-1:0] op1,
+                                logic [VPU_VLEN-1:0] op2, logic [VPU_VLEN-1:0] vd, logic [VPU_VLEN-1:0] actual_result);
         localparam int SEW = 16;
-        localparam int VL = VLEN/SEW;
+        localparam int VL = VPU_VLEN/SEW;
         logic [VL*SEW-1:0] expected_vec;
 
         major_opcode_e mopcode;

@@ -133,6 +133,7 @@ run-questa-tb-gui: check-tools
 	@echo "--> Compiling software..."
 	$(MAKE) build-sw PROJECT=$(PROJECT)
 	@echo "--> Building local simulation workspace..."
+	@echo "--> TB_TOP = $(TB_TOP)..."
 	$(MAKE) build-sim
 	@if [ -n "$(strip $(TB_FILE))" ]; then \
 		echo "--> Compiling testbench source $(TB_FILE)..."; \

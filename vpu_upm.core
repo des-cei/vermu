@@ -13,9 +13,9 @@ filesets:
             - rtl/if_xif_exe.sv
             # - rtl/load_store_unit_mis.sv
             # - rtl/obi_lsu_top.sv
-            # - rtl/simd_controller.sv
-            # - rtl/VAU_lanes.sv
-            # - rtl/VAU.sv
+            - rtl/vpu_simd_controller.sv
+            - rtl/vpu_simd_block.sv
+            - rtl/vpu_vau.sv
             - rtl/vpu_control_unit.sv
             - rtl/vpu_decoder.sv
             - rtl/vpu_xif_decoder.sv
@@ -44,8 +44,12 @@ filesets:
         files:
         - tb/vpu_stimulus_gen.sv
         # - tb/vpu_pipeline_checker.sv
+        - tb/cvxif_cpu_model.sv
+        - tb/tb_vpu_alu.sv
         - tb/tb_vpu_top.sv
         - tb/tb_vpu_dispatch.sv
+        - tb/tb_vpu_csr.sv
+        - tb/tb_vpu_xif_decoder.sv
         file_type: systemVerilogSource
         # include_dirs:
         #   - tb

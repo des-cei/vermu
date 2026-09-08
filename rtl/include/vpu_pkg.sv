@@ -28,7 +28,7 @@ package vpu_pkg;
     // typedef logic [31:0] elen_t;    
     
     // Number of bits in a vector register (in each of 32 registers). Min 32. [STATIC]
-    localparam int unsigned VPU_VLEN = 128; //128;	             
+    localparam int unsigned VPU_VLEN = 256; //128;	             
     
     // Number of Integer  Processing Units [STATIC]
     localparam int unsigned VPU_N_IPU = 2;	             
@@ -36,7 +36,7 @@ package vpu_pkg;
     // Maximum Register Grouping [FIXED]
     localparam int unsigned VPU_LMUL_MAX = 8;	             
     
-    // typedef logic [VPU_VLEN-1:0] vlen_t;                    
+    typedef logic [VPU_VLEN-1:0] vlen_t;
 
     localparam int unsigned VLENB = VPU_VLEN / 8; 
     localparam int unsigned VLENB_W = $clog2(VPU_VLEN / 8 + 1); 
@@ -236,5 +236,52 @@ package vpu_pkg;
         dispatch_sideband_t  instr_fragment;   // Added
     } vpu_issue_fifo_res_t;
 
+    ////////////////
+    // Arithmetic //
+    ////////////////
 
+    typedef struct packed {
+        logic sew8;
+        logic sew16;
+        logic sew32;  
+    } operation_valid_t;
+    
+    typedef struct packed {
+        logic[7:0]  e8;
+        logic[15:0] e16;
+        logic[31:0] e32;  
+    } red_acc_t;
+
+    function automatic int get_sew_bits(input sew_e SEW);
+        case (SEW)
+            SEW_8:  return 8;
+            SEW_16: return 16;
+            SEW_32: return 32;
+            default: return 32;
+        endcase
+    endfunction
+
+    function automatic int get_lane_limit(input sew_e SEW, input int unsigned vl);
+        case (SEW)
+            SEW_8: begin
+                if      (vl <= 4)  return 1;
+                else if (vl <= 8)  return 2;
+                else if (vl <= 12) return 3;
+                else               return 4;
+            end
+            SEW_16: begin
+                if      (vl <= 2)  return 1;
+                else if (vl <= 4)  return 2;
+                else if (vl <= 6)  return 3;
+                else               return 4;
+            end
+            default: begin 
+                if (vl <= 1)       return 1;
+                else if (vl <= 2)  return 2;
+                else if (vl <= 3)  return 3;
+                else               return 4;
+            end
+        endcase
+    endfunction   
+    
 endpackage

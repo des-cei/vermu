@@ -34,7 +34,7 @@ module vregfile
 );
 
 
-	logic [NRVREG-1:0][VLEN-1:0]vreg;  
+	logic [NRVREG-1:0][VPU_VLEN-1:0]vreg;  
 
     logic mask_bit;
     logic prestart;
@@ -139,7 +139,7 @@ module vregfile
             if (vpu_req_i.opcode == VMV_XS ) begin
                  active_vl = (logic'(1) << sew_bits) - 1;
             end else begin             
-                if (num_bits >= VLEN) 
+                if (num_bits >= VPU_VLEN) 
                     active_vl = '1;
                 else 
                     active_vl = (logic'(1) << num_bits) - 1;

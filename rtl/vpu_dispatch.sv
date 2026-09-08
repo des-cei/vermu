@@ -314,7 +314,7 @@ module vpu_dispatch
                 dispatch_last[i].dispatch_vd = vd_addr;
 
                 fu_instr_issue[i].instr_issue    = issue;
-                fu_instr_issue[i].instr_decoded  = disp_decoded_i;  
+                fu_instr_issue[i].instr_decoded  = slot_q[i].decoded;
                 fu_instr_issue[i].instr_fragment = dispatch_last[i];
             end
         end
@@ -359,7 +359,8 @@ module vpu_dispatch
         // dispatch_fire = disp_valid_i && new_slot_free && !new_waw;
         // dispatch_fire = disp_valid_i && new_slot_free;
         dispatch_fire = disp_valid_i && new_slot_free && 
-                        ((disp_decoded_i.fmt != FMT_OPCFG_CSRRCI) && (disp_decoded_i.major_opcode == OPCODE_OP_V)) &&
+                        (disp_decoded_i.fmt != FMT_OPCFG_CSRRCI) &&
+                        // ((disp_decoded_i.major_opcode == OPCODE_OP_V) || (disp_decoded_i.major_opcode == OPCODE_LOAD) || (disp_decoded_i.major_opcode == OPCODE_STORE)) &&
                         (disp_decoded_i.major_opcode != OPCODE_SYSTEM);
     end
 

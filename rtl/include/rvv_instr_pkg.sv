@@ -244,7 +244,7 @@ package rvv_instr_pkg;
         
         //Integer comparison  instructions
         OP_VMSEQ, OP_VMSNE, OP_VMSLTU, OP_VMSLT, OP_VMSLEU, OP_VMSLE, OP_VMSGTU, OP_VMSGT, 
-        VMSGEU, VMSGE,    //TODO: fix pseudoinstruction
+        OP_VMSGEU, OP_VMSGE,    //TODO: fix pseudoinstruction
         
         //Zero- sign- extend  --> Not necessary, EEW always > SEW   //TODO: necessary?
         VZEXT, VSEXT,  
@@ -298,7 +298,7 @@ package rvv_instr_pkg;
 
     } op_e; 
 
-    function automatic op_e instr_to_op(vec_instr_e instr);
+ /*   function automatic op_e instr_to_op(vec_instr_e instr);
         unique case (instr)
             // add/sub/widen/carry 
             VADD_VV, VADD_VX, VADD_VI:                          instr_to_op = OP_VADD;
@@ -455,6 +455,6 @@ package rvv_instr_pkg;
         endcase
 
     endfunction
-
+*/
 endpackage 
     

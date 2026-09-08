@@ -150,17 +150,18 @@ module tb_vpu_dispatch;
         input logic        uses_vd_src = 0
     );
         vpu_decoded_t d;
-        d             = '0;
-        d.vd          = vd;
-        d.vs1         = vs1;
-        d.vs2         = vs2;
-        d.is_arith    = 1'b1;
-        d.uses_vs1    = uses_vs1;
-        d.uses_vs2    = uses_vs2;
-        d.uses_vd_src = uses_vd_src;
-        d.vl          = vl;
-        d.vtype.vsew        = sew_e'(vsew);
-        d.vtype.vlmul       = lmul_e'(vlmul);
+        d              = '0;
+        d.major_opcode = OPCODE_OP_V;
+        d.vd           = vd;
+        d.vs1          = vs1;
+        d.vs2          = vs2;
+        d.is_arith     = 1'b1;
+        d.uses_vs1     = uses_vs1;
+        d.uses_vs2     = uses_vs2;
+        d.uses_vd_src  = uses_vd_src;
+        d.vl           = vl;
+        d.vtype.vsew   = sew_e'(vsew);
+        d.vtype.vlmul  = lmul_e'(vlmul);
         return d;
     endfunction
 
@@ -173,6 +174,7 @@ module tb_vpu_dispatch;
     );
         vpu_decoded_t d;
         d             = '0;
+        d.major_opcode = OPCODE_LOAD;
         d.vd          = vd;
         d.is_load     = 1'b1;
         d.vl          = vl;
@@ -273,9 +275,9 @@ module tb_vpu_dispatch;
             instr_state[x_fifo_res.issue_exec_o.req.id].completed = 1;
     end
 
-    ///////////////
-    // Test body // 
-    ///////////////
+    //////////
+    // Test // 
+    //////////
 
     logic disp_ready_d;
     logic issued;
@@ -305,7 +307,7 @@ module tb_vpu_dispatch;
             vpu_decoded_t dec;
             x_issue_t     issue;
 
-            instr_state[1] = '{default:0};
+            instr_state[0] = '{default:0};
 
             dec = make_arith(.vd(5'd2), .vs1(5'd0), .vs2(5'd1), .vl(8'd2), .vsew(2'b10));
             issue = make_issue(.id(4'd1));
@@ -316,8 +318,8 @@ module tb_vpu_dispatch;
             @(posedge clk); #1;
             disp_valid = 0;
             wait_cycles(8); // let FU complete
-            check("Instruction 1 issued", instr_state[1].dispatched);
-            check("Instruction 1 completed", instr_state[1].completed);
+            check("Instruction 1 issued", instr_state[0].dispatched);
+            check("Instruction 1 completed", instr_state[0].completed);
         end
 
         

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
-module VAU_lanes 
+module vpu_simd_block 
 import vpu_pkg::*; 
-import vector_ops_pkg::*;
+import rvv_instr_pkg::*;
 #(
    	parameter type data_t = logic [31:0]
 )(
@@ -18,7 +18,7 @@ import vector_ops_pkg::*;
     input data_t  op_d_i,
     input logic   is_signed_i,
     input logic   carry_i,
-	input vsew_e  sew_i,
+	input sew_e   sew_i,
     output data_t result_o,
     output logic  result_valid_o
 );
@@ -43,7 +43,7 @@ import vector_ops_pkg::*;
     // Lanes //
     ///////////
    
-    VAU #(
+    vpu_vau #(
         .Width(8)
     ) i_lane_8b1 (
         .clk_i            (clk_i),
@@ -60,7 +60,7 @@ import vector_ops_pkg::*;
         .result_valid_o   (result_valid[0])
     );
   
-    VAU #(
+    vpu_vau #(
         .Width(8)
     ) i_lane_8b2 (
         .clk_i            (clk_i),
@@ -77,7 +77,7 @@ import vector_ops_pkg::*;
         .result_valid_o   (result_valid[1])
     );
 
-    VAU #(
+    vpu_vau #(
         .Width(16)
     ) i_lane_16b (
         .clk_i            (clk_i),
@@ -94,7 +94,7 @@ import vector_ops_pkg::*;
         .result_valid_o   (result_valid[2])
     );
 
-    VAU #(
+    vpu_vau #(
         .Width(32)
     ) i_lane_32b (
         .clk_i            (clk_i),
@@ -132,7 +132,7 @@ import vector_ops_pkg::*;
 
         activate_lane = '0;
 
-        is_signed_and_not_vmulhsu = is_signed && (operation_i != VMULHSU) ;
+        is_signed_and_not_vmulhsu = is_signed && (operation_i != OP_VMULHSU) ;
 
         unique case(sew_i)
             SEW_8: begin
@@ -149,8 +149,8 @@ import vector_ops_pkg::*;
                 activate_lane.sew16 = operation_valid_i;
                 activate_lane.sew32 = operation_valid_i;
                 unique case(operation_i)
-                    VMACC,
-                    VNMSAC: begin       
+                    OP_VMACC,
+                    OP_VNMSAC: begin       
                         op_d8b1 = op_d_i[7:0];
                         op_d8b2 = op_d_i[15:8];
                         op_d16  = 16'(op_d_i[23:16]);
@@ -168,8 +168,8 @@ import vector_ops_pkg::*;
                 activate_lane.sew16 = operation_valid_i;
                 activate_lane.sew32 = operation_valid_i;
                 unique case(operation_i)
-                    VMACC,
-                    VNMSAC: begin        
+                    OP_VMACC,
+                    OP_VNMSAC: begin        
                         op_d16  = op_d_i[15:0];
                         op_d32  = 32'(op_d_i[31:16]);
                     end
@@ -181,8 +181,8 @@ import vector_ops_pkg::*;
                 op_s2_32b = op_s2;
                 activate_lane.sew32 = operation_valid_i;
                 unique case(operation_i)
-                    VMACC,
-                    VNMSAC: begin        
+                    OP_VMACC,
+                    OP_VNMSAC: begin        
                         op_d32  = op_d_i;
                     end
                     default:;
@@ -199,20 +199,20 @@ import vector_ops_pkg::*;
         unique case(sew_i)
             SEW_8:  begin
                 unique case (operation_i)
-                    VMSEQ,
-                    VMSNE,
-                    VMSLTU,
-                    VMSLT : result_o = {result_32b[0], result_16b[0], result_8b2[0], result_8b1[0]};
+                    OP_VMSEQ,
+                    OP_VMSNE,
+                    OP_VMSLTU,
+                    OP_VMSLT : result_o = {result_32b[0], result_16b[0], result_8b2[0], result_8b1[0]};
                     default : result_o = {result_32b[7:0], result_16b[7:0], result_8b2, result_8b1}; 
                 endcase  
                 result_valid_o = &result_valid;
             end
             SEW_16: begin
                 unique case (operation_i)
-                    VMSEQ,
-                    VMSNE,
-                    VMSLTU,
-                    VMSLT : result_o = {result_32b[0], result_16b[0]};
+                    OP_VMSEQ,
+                    OP_VMSNE,
+                    OP_VMSLTU,
+                    OP_VMSLT : result_o = {result_32b[0], result_16b[0]};
                     default : result_o = {result_32b[15:0], result_16b}; 
                 endcase  
                 result_valid_o = result_valid[2] && result_valid[3]; 
