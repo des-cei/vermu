@@ -36,6 +36,7 @@ import rvv_instr_pkg::*;
     // input  id_t                 id_i,
     input vtype_t               vtype_i,
     input vl_t                  vl_i,
+    input vl_t                  vstart_i,
     output logic                dec_resp_valid_o,
     // output hartid_t             hartid_o,
     // output id_t                 id_o,
@@ -63,6 +64,7 @@ import rvv_instr_pkg::*;
             decoded_req_o.vtype.vsew    = vtype_i.vsew;
             decoded_req_o.vtype.vlmul   = vtype_i.vlmul;
             decoded_req_o.vl            = vl_i;
+            decoded_req_o.vstart        = vstart_i;
 
             unique case (instr_req_i.vec_instr)
 

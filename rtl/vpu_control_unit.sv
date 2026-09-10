@@ -519,6 +519,7 @@ import vpu_pkg::*;
         // .vec_instr_i       (vec_instr),
         .vtype_i           (vtype_q),
         .vl_i              (vl_q),
+        .vstart_i          (vstart_q),
         .dec_resp_valid_o  (decoder_valid), // To data hazard detection 
         .decoded_req_o     (decoder_req),
         .avl_o             (prov_avl)

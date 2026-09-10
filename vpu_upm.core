@@ -20,7 +20,7 @@ filesets:
             - rtl/vpu_decoder.sv
             - rtl/vpu_xif_decoder.sv
             - rtl/vpu_top.sv
-            # - rtl/vregfile.sv
+            - rtl/vpu_vregfile.sv
             - rtl/execution_units.sv
             - rtl/vpu_dispatch.sv
             - rtl/shift_register.sv

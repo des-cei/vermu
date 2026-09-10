@@ -77,7 +77,7 @@ module vpu_dispatch
 
     function automatic logic [FRAG_CNT_W-1:0] calc_total_frags(
         input logic [7:0] vl,
-        input logic [2:0] vsew,     
+        input sew_e vsew,     
         input logic [3:0] lmul_val  
     );
         logic [FRAG_CNT_W-1:0] epf;       // elements per fragment
@@ -85,10 +85,9 @@ module vpu_dispatch
         logic [FRAG_CNT_W-1:0] max_frags;
 
         case (vsew)
-            3'd0:    epf = FRAG_CNT_W'(DW /  8);  // SEW=8
-            3'd1:    epf = FRAG_CNT_W'(DW / 16);  // SEW=16
-            3'd2:    epf = FRAG_CNT_W'(DW / 32);  // SEW=32
-            default: epf = FRAG_CNT_W'(DW / 32);  // default: SEW=32
+            SEW_8:   epf = FRAG_CNT_W'(DW /  8);  
+            SEW_16:  epf = FRAG_CNT_W'(DW / 16);  
+            default: epf = FRAG_CNT_W'(DW / 32);  
         endcase
         if (epf == '0) epf = 1;  // TODO: not real
         tf        = (FRAG_CNT_W'(vl) + epf - 1) / epf;
@@ -117,6 +116,30 @@ module vpu_dispatch
         // );
 
         return tf;
+    endfunction
+
+    function automatic vl_t calc_elements_for_frag(
+        input vl_t             vl,
+        input sew_e            vsew,
+        input logic [FRAG_CNT_W-1:0] frag
+    );
+        vl_t epf;
+        vl_t consumed;
+
+        case (vsew)
+            SEW_8:   epf = vl_t'(DW /  8);  
+            SEW_16:  epf = vl_t'(DW / 16);  
+            default: epf = vl_t'(DW / 32);
+        endcase
+        if (epf == '0) epf = 1;
+
+        consumed = vl_t'(frag) * epf;
+        if (consumed >= vl)
+            return '0;
+        else if (vl - consumed > epf)
+            return epf;
+        else
+            return vl - consumed;
     endfunction
 
     // Decode vlmul field to actual multiplier value 
@@ -304,6 +327,10 @@ module vpu_dispatch
                 // Fragment index for data allocation in functional units
                 dispatch_last[i].is_last = (slot_q[i].next_frag == slot_q[i].total_frags - 1);
                 dispatch_last[i].frag_idx = frag_in_reg[i];
+                dispatch_last[i].elements = calc_elements_for_frag(
+                    slot_q[i].decoded.vl,
+                    slot_q[i].decoded.vtype.vsew,
+                    slot_q[i].next_frag);
 
                 // Start from stored metadata
                 issue = slot_q[i].issue_meta;

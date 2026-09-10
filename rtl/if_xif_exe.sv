@@ -35,4 +35,11 @@ interface if_xif_exe;
         input  exe_wrapper_result
     );
 
+    modport register_file (     // Monitor ongoing instructions 
+        // input  wrapper_exe_instr_valid,
+        // input  wrapper_exe_instr_issue,
+        // input  wrapper_exe_recv_result_ready,
+        input  exe_wrapper_result
+    );
+
 endinterface //if_xif_exe

@@ -1,8 +1,9 @@
 
 module cvxif_cpu_model 
 import cvxif_types_pkg::*;
+import vpu_pkg::*;
 #(
-    parameter int unsigned QUEUE_DEPTH = 16
+    parameter int unsigned QUEUE_DEPTH = 4
 ) (
     input logic clk_i,
     input logic rst_ni,
@@ -26,8 +27,10 @@ import cvxif_types_pkg::*;
 
     // Instruction queue
     x_issue_req_t instr_queue[$];
+    x_register_t reg_queue[$];
 
     x_issue_req_t current_instr;
+    x_register_t current_reg;
     logic         current_instr_valid;
     logic         waiting_for_result;
     id_t          waiting_result_id;
@@ -54,6 +57,7 @@ import cvxif_types_pkg::*;
     // Issue interface
 
     x_issue_req_t next_instr;
+    x_register_t next_reg;
 
     assign x_issue_valid_o = current_instr_valid;
     assign x_issue_req_o   = current_instr;
@@ -62,6 +66,7 @@ import cvxif_types_pkg::*;
 
         if (!rst_ni) begin
             current_instr       <= '0;
+            current_reg         <= '0;
             current_instr_valid <= 1'b0;
             waiting_for_result  <= 1'b0;
             waiting_result_id   <= '0;
@@ -77,7 +82,9 @@ import cvxif_types_pkg::*;
 
                     if (instr_queue.size() != 0) begin
                         next_instr = instr_queue.pop_front();
+                        next_reg   = reg_queue.pop_front();
                         current_instr       <= next_instr;
+                        current_reg         <= next_reg;
                         current_instr_valid <= 1'b1;
                     end
 
@@ -107,13 +114,14 @@ import cvxif_types_pkg::*;
                 else if (instr_queue.size() != 0) begin
 
                     next_instr = instr_queue.pop_front();
-
+                    next_reg   = reg_queue.pop_front();
                     current_instr       <= next_instr;
+                    current_reg         <= next_reg;
                     // current_instr       <= instr_queue.pop_front();
                     current_instr_valid <= 1'b1;
 
-                    $display("[%0t] CVXIF MODEL: Next instruction presented, id=%0d",
-                             $time, next_instr.id);
+                    // $display("[%0t] CVXIF MODEL: Next instruction presented, id=%0d",
+                    //          $time, next_instr.id);
                 end
                 else begin
                     current_instr_valid <= 1'b0;
@@ -126,6 +134,7 @@ import cvxif_types_pkg::*;
 
                 if (instr_queue.size() != 0) begin
                     current_instr       <= instr_queue.pop_front();
+                    current_reg         <= reg_queue.pop_front();
                     current_instr_valid <= 1'b1;
                 end
             end
@@ -133,8 +142,8 @@ import cvxif_types_pkg::*;
     end
 
     // Register interface
-    assign x_register_o       = '0;   // No register response is generated unless explicitly added.
-    assign x_register_valid_o = 1'b0;
+    assign x_register_o       = current_reg;   // No register response is generated unless explicitly added.
+    assign x_register_valid_o = current_instr_valid;
 
     // Commit interface
     assign x_commit_o.id          = x_issue_req_o.id;    
@@ -150,9 +159,12 @@ import cvxif_types_pkg::*;
     task automatic send_instruction(
         input logic [31:0] instr,
         input hartid_t     hartid,
-        input id_t         id
+        input id_t         id,
+        input logic [31:0] rs1
     );
         x_issue_req_t req;
+        x_register_t register;
+        vec_funct3_e fmt;
 
         req = '0;
 
@@ -161,6 +173,17 @@ import cvxif_types_pkg::*;
         req.id = id;  
 
         instr_queue.push_back(req);
+
+        register = '0;
+
+        fmt = vec_funct3_e'(instr[14:12]);
+
+        if (fmt == FMT_OPCFG_CSRRCI || fmt == FMT_OPIVX) begin
+            register.rs_valid = 3'b001;
+            register.rs[0] = rs1;
+        end
+
+        reg_queue.push_back(register);
 
         $display("[%0t] CVXIF MODEL: Instruction queued, id=%0d",
                  $time, req.id);

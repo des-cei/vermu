@@ -28,15 +28,18 @@ package vpu_pkg;
     // typedef logic [31:0] elen_t;    
     
     // Number of bits in a vector register (in each of 32 registers). Min 32. [STATIC]
-    localparam int unsigned VPU_VLEN = 256; //128;	             
+    localparam int unsigned VPU_VLEN = 128;	             
     
     // Number of Integer  Processing Units [STATIC]
     localparam int unsigned VPU_N_IPU = 2;	             
 
+    // Datapath width
+    typedef logic [VPU_N_IPU*ELEN-1:0] dw_t;
+
     // Maximum Register Grouping [FIXED]
     localparam int unsigned VPU_LMUL_MAX = 8;	             
     
-    typedef logic [VPU_VLEN-1:0] vlen_t;
+    typedef logic [VPU_VLEN-1:0] vlen_t; // TODO: ? 
 
     localparam int unsigned VLENB = VPU_VLEN / 8; 
     localparam int unsigned VLENB_W = $clog2(VPU_VLEN / 8 + 1); 
@@ -44,8 +47,8 @@ package vpu_pkg;
     // // Selected element width [DYNAMIC]
     // localparam int unsigned SEW = 32; 	
 
-    // // Number of vector registers (RV32I) [FIXED]
-    // localparam int unsigned NRVREG = 32;
+    // Number of vector registers (RV32I) [FIXED]
+    localparam int unsigned NRVREG = 32;
 
     // typedef logic [$clog2(NRVREG)-1:0] vreg_t;
     // typedef logic[$clog2(NRVREG)-1:0] addr_t;
@@ -175,6 +178,7 @@ package vpu_pkg;
         // lmul_e         vtype_vlmul;
         vtype_t        vtype;
         vl_t           vl;
+        vl_t           vstart;
     } vpu_decoded_t;
 
     ////////////////
@@ -206,7 +210,8 @@ package vpu_pkg;
     typedef struct packed { 
         // Fragmentation data for chaining
         logic [FRAG_CNT_W-1:0]   frag_idx;  //[$clog2(FRAGS_PER_REG)-1:0] ?
-        logic                    is_last;
+        logic                    is_last;   
+        vl_t                     elements;
         logic [4:0]              dispatch_vd;  
         logic [4:0]              dispatch_vs1; 
         logic [4:0]              dispatch_vs2; 
@@ -231,7 +236,7 @@ package vpu_pkg;
 
     // Complementary VPU fields for 'exe_wrapper_result'
     typedef struct packed {
-        x_issue_fifo_res_t   xif_fifo_result;
+        x_issue_fifo_res_t   xif_fifo_result;  // Response to result fifo
         vpu_decoded_t        instr_decoded;    // Added issue decoded
         dispatch_sideband_t  instr_fragment;   // Added
     } vpu_issue_fifo_res_t;
