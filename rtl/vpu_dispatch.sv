@@ -444,7 +444,7 @@ module vpu_dispatch
         // Allocate new slot on dispatch 
         if (dispatch_fire) begin
             logic [3:0] lv;
-            logic [2:0] vsew;
+            sew_e vsew;
             lv   = vlmul_to_val(disp_decoded_i.vtype.vlmul); // Considers CSRs?
             vsew = disp_decoded_i.vtype.vsew;
 
