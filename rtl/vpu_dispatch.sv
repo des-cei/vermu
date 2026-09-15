@@ -18,9 +18,9 @@ module vpu_dispatch
     input  logic [X_ID_WIDTH-1:0]      kill_id_i,
     input  logic                       x_fifo_res_full_i,
     output x_issue_fifo_res_t          x_fifo_res_o,     // To result_fifo
-    if_xif_exe.xif_wrapper             fu_valu,         // slot FU_VALU=0
-    if_xif_exe.xif_wrapper             fu_vlsu,         // slot FU_VLSU=1
-    if_xif_exe.xif_wrapper             fu_vsld          // slot FU_VSLD=2
+    if_xif_exe.xif_wrapper             fu_valu,          // slot FU_VALU=0
+    if_xif_exe.xif_wrapper             fu_vlsu,          // slot FU_VLSU=1
+    if_xif_exe.xif_wrapper             fu_vsld           // slot FU_VSLD=2
 );
 
     // In-flight slot definition

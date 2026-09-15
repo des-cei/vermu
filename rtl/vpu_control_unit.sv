@@ -66,36 +66,36 @@ import vpu_pkg::*;
     // User application signals //
     //////////////////////////////
 
-    vec_instr_e vec_instr;
-    logic disp_ready;
+    vec_instr_e        vec_instr;
+    logic              disp_ready;
     x_issue_fifo_res_t vpu_fifo_res;
 
     // CSR signals
-    vtype_t vtype_d, vtype_q;
-    vl_t vl_d, vl_q;
-    vl_t vstart_d, vstart_q;
+    vtype_t             vtype_d, vtype_q;
+    vl_t                vl_d, vl_q;
+    vl_t                vstart_d, vstart_q;
     logic [VLENB_W-1:0] vlenb_d, vlenb_q;
     // vxsat --NA
     // vxrm  --NA
     // vcsr  --NA
 
-    vec_instr_e issue_instr_op;
-    logic vtype_valid, vtype_supported;
-    x_issue_fifo_res_t csr_fifo_res;
-    logic csr_lecture_valid;
+    vec_instr_e             issue_instr_op;
+    logic                   vtype_valid, vtype_supported;
+    x_issue_fifo_res_t      csr_fifo_res;
+    logic                   csr_lecture_valid;
     logic [X_RFW_WIDTH-1:0] csr_lecture;
 
     /////////////////////////
     // xif_wrapper signals //
     /////////////////////////
 
-    x_issue_t  temp_x_issue_i;
+    x_issue_t      temp_x_issue_i;
     x_issue_resp_t resp_instr_predecoder;
-    logic     rs_valid_flag;                  
+    logic          rs_valid_flag;                  
 
     // ISSUE FIFO signals (First FIFO INTERA)
-    vpu_issue_t   issue_commit_i;         // Input to FIFO commit
-    vpu_issue_t   issue_commit_o;         // Output from FIFO_commit - Input to FIFO_instr if POP in FIFO_commit + ~kill + accept
+    vpu_issue_t issue_commit_i;         // Input to FIFO commit
+    vpu_issue_t issue_commit_o;         // Output from FIFO_commit - Input to FIFO_instr if POP in FIFO_commit + ~kill + accept
     logic       fifo_commit_full;
     logic       fifo_commit_empty;
     logic [1:0] fifo_commit_usage;
@@ -103,7 +103,7 @@ import vpu_pkg::*;
     logic       fifo_commit_pop;
 
     // TASK FIFO signals (Second FIFO INTERA)
-    vpu_issue_t   issue_instr_o;          //Output from FIFO_instr - Input to execution block
+    vpu_issue_t issue_instr_o;          //Output from FIFO_instr - Input to execution block
     logic       fifo_instr_full;
     logic       fifo_instr_empty;
     logic [1:0] fifo_instr_usage;

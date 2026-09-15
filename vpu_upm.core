@@ -12,7 +12,8 @@ filesets:
             - rtl/include/vpu_pkg.sv
             - rtl/if_xif_exe.sv
             # - rtl/load_store_unit_mis.sv
-            # - rtl/obi_lsu_top.sv
+            - rtl/vendor/obione/rtl/obione.sv
+            - rtl/obi_lsu_top.sv
             - rtl/vpu_simd_controller.sv
             - rtl/vpu_simd_block.sv
             - rtl/vpu_vau.sv
@@ -50,6 +51,7 @@ filesets:
         - tb/tb_vpu_dispatch.sv
         - tb/tb_vpu_csr.sv
         - tb/tb_vpu_xif_decoder.sv
+        - tb/tb_vpu_obi_lsu_top.sv
         file_type: systemVerilogSource
         # include_dirs:
         #   - tb

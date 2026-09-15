@@ -22,7 +22,7 @@ import vpu_pkg::*;
     localparam type         registers_t         = logic [NrRgprPorts-1:0][XLEN-1:0],
     parameter  type         obi_req_t           = logic,
     parameter  type         obi_resp_t          = logic,
-    parameter  int unsigned EXT_XBAR_NMASTER    = 1
+    parameter  int unsigned EXT_XBAR_NMASTER    = VPU_N_IPU
     
 ) ( 
 
@@ -84,7 +84,6 @@ import vpu_pkg::*;
     ///////////////
 
     //Interface instance 
-    // if_xif_exe xif_exe_i ();
     if_xif_exe xif_exe_valu_i ();
     if_xif_exe xif_exe_vlsu_i ();
     if_xif_exe xif_exe_vsld_i ();
@@ -116,7 +115,6 @@ import vpu_pkg::*;
         .x_result_valid_o    (result_valid),
         .x_result_ready_i    (result_ready),
         .x_result_o          (result),  
-        // .if_wrapper_exe (xif_exe_i.xif_wrapper), 
         .if_wrapper_exe_valu (xif_exe_valu_i.xif_wrapper),
         .if_wrapper_exe_vlsu (xif_exe_vlsu_i.xif_wrapper),
         .if_wrapper_exe_vsld (xif_exe_vsld_i.xif_wrapper)
@@ -136,15 +134,15 @@ import vpu_pkg::*;
         .if_exe_wrapper (xif_exe_vsld_i.exe_unit)
     );
 
-    dw_t vrf_wdata [2:0];
-    dw_t vrf_rdata1 [2:0];
-    dw_t vrf_rdata2 [2:0];
+    dw_t vrf_wdata   [2:0];
+    dw_t vrf_rdata1  [2:0];
+    dw_t vrf_rdata2  [2:0];
     dw_t vrf_vd_data [2:0];
 
-    dw_t simd_result;
+    dw_t simd_result, vlsu_result;
 
     assign vrf_wdata[FU_VALU] = simd_result;
-    // assign vrf_wdata[FU_VLSU] = vlsu_result;
+    assign vrf_wdata[FU_VLSU] = vlsu_result;
     // assign vrf_wdata[FU_VSLD] = vsld_result;
 
     vpu_vregfile vregfile_i(
@@ -173,6 +171,30 @@ import vpu_pkg::*;
         .if_exe_wrapper   (xif_exe_valu_i.exe_unit)
     );
 
+    obi_lsu_top #(
+        .obi_req_t       (obi_req_t),
+        .obi_resp_t      (obi_resp_t),
+        .EXT_XBAR_NMASTER(EXT_XBAR_NMASTER)
+    ) obi_lsu_top_i (
+        .clk_i             (clk_i),   
+        .rst_ni            (rst_ni),
+        .data_i            (vrf_rdata1[FU_VLSU]),   // TODO: rdata1?
+        .data_o            (vrf_wdata[FU_VLSU]),
+        .if_exe_wrapper    (xif_exe_vlsu_i.exe_unit),
+        .masters_resp_i    (masters_resp_i),
+        .masters_req_o     (masters_req_o) 
+        // .vpu_req_i         (vpu_req),
+        // .vl_i              (csr_vl),
+        // .vlmax_i           (vlmax),
+        // .state_was_busy_i  (state_was_busy),
+        // .vrf_rdata_i       (vrf_rdata2),
+        // .vrf_rdata_done_i  (done_r2),
+        // .vrf_wdata_o       (vrf_wdata),
+        // .lsu_vrf_we_o      (lsu_vrf_we),
+        // .lsu_rdata_valid_o (),
+        // .lsu_result_valid_o(lsu_result_valid),
+    );
+      
 /////// User ////////////
 /*
   logic  instr_vrf_we, op_valid_ls, op_valid_simd, done_w, done_r2,

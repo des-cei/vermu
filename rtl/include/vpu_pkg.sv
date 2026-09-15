@@ -31,7 +31,7 @@ package vpu_pkg;
     localparam int unsigned VPU_VLEN = 128;	             
     
     // Number of Integer  Processing Units [STATIC]
-    localparam int unsigned VPU_N_IPU = 2;	             
+    localparam int unsigned VPU_N_IPU = 1;	             
 
     // Datapath width
     typedef logic [VPU_N_IPU*ELEN-1:0] dw_t;

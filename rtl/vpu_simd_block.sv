@@ -23,15 +23,15 @@ import rvv_instr_pkg::*;
     output logic  result_valid_o
 );
  
-    logic [7:0]  op_s1_8b1, op_s1_8b2, op_s2_8b1, op_s2_8b2, result_8b1, result_8b2, op_d8b1, op_d8b2; 
+    logic [ 7:0] op_s1_8b1, op_s1_8b2, op_s2_8b1, op_s2_8b2, result_8b1, result_8b2, op_d8b1, op_d8b2; 
     logic [15:0] op_s1_16b, op_s2_16b, result_16b, op_d16;  
     logic [31:0] op_s1_32b, op_s2_32b, result_32b, op_d32;    
-    logic [3:0]  result_valid;
+    logic [ 3:0] result_valid;
 
     logic [31:0] op_s1, op_s2;
-    logic is_signed, carry;
+    logic        is_signed, carry;
+    logic        is_signed_and_not_vmulhsu;
     operation_valid_t activate_lane;
-    logic  is_signed_and_not_vmulhsu;
 
     assign op_s1     = op_s1_i;
     assign op_s2     = op_s2_i;

@@ -19,8 +19,7 @@ module simd_controller
 );
 
     op_e operation; 
-    // vl_t   vl;
-    vl_t   iter_vl;
+    vl_t  iter_vl;
     sew_e sew;
 
     assign operation = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.operation;
@@ -28,7 +27,7 @@ module simd_controller
     assign iter_vl = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
     assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vtype.vsew;
 
-    dw_t op_s1;
+    dw_t         op_s1;
     logic [31:0] scalar_val;
 
     always_comb begin :op1_assignation
@@ -223,13 +222,12 @@ module simd_controller
     end
 
     // Output to XIF wrapper
-    assign if_exe_wrapper.exe_wrapper_recv_instr_ready                             = 1'b1; // TODO: Ready for new instruction
-    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_valid_exec_o   = lanes_result_valid;    //Instruction finished
-    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o    = '0; // TODO ?  
-    // assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o    = result_o[31:0];
+    assign if_exe_wrapper.exe_wrapper_recv_instr_ready                             = 1'b1;               // TODO: Ready for new instruction
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_valid_exec_o   = lanes_result_valid; // Instruction finished
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o    = '0;                 // TODO ?  
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.req      = if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.req;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.resp     = if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.resp;
-    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.register = '0; // TODO?
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.register = '0;                 // TODO ?
 
     assign if_exe_wrapper.exe_wrapper_result.instr_decoded = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded;
     assign if_exe_wrapper.exe_wrapper_result.instr_fragment= if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;

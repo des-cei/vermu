@@ -1,8 +1,6 @@
 *.txt
-rtl/dispatch_old.sv
 rtl/execution_units.sv
-rtl/vpu_vregfile_proposal.sv
-rtl/old_vregfile.sv
+rtl/vendor/obione/
 build/
 sw/build/
 tb/vpu_vregfile.sv
@@ -10,3 +8,4 @@ tb/*.do
 !tb/wave_automatize.do
 tb/env.sh
 transcript
+work/
