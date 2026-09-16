@@ -158,32 +158,42 @@ module tb_vpu_alu;
         instruction_id = '0;
 
         vtype = make_vtype(SEW_32, LMUL_1, VTA, VMA);
-        xif_model.send_instruction(make_vsetivli(5'd5, 5'd3, vtype), 1, instruction_id, 0);
+        xif_model.send_instruction(make_vsetivli(5'd5, 5'd3, vtype), 1, instruction_id, 0, 0);
         instruction_id++;
         
         @(posedge clk_i);
         wait(x_issue_resp.accept);
-        xif_model.send_instruction(make_arith(6'b000000, 5'd3, 5'hA, 5'd2, FMT_OPIVI_CSRRC), 1, instruction_id, 0); // vadd.vi
+        xif_model.send_instruction(make_arith(6'b000000, 5'd3, 5'hA, 5'd2, FMT_OPIVI_CSRRC), 1, instruction_id, 0, 0); // vadd.vi
         instruction_id++;
 
         @(posedge clk_i);
         wait(x_issue_resp.accept);  
-        xif_model.send_instruction(make_arith(6'b000000, 5'd4, 5'hB, 5'd2, FMT_OPIVI_CSRRC), 1, instruction_id, 0); // vadd.vi
+        xif_model.send_instruction(make_arith(6'b000000, 5'd4, 5'hB, 5'd2, FMT_OPIVI_CSRRC), 1, instruction_id, 0, 0); // vadd.vi
         instruction_id++;
 
         @(posedge clk_i);
         wait(x_issue_resp.accept);  
-        xif_model.send_instruction(make_arith(6'b000000, 5'd3, 5'hC, 5'd2, FMT_OPIVX), 1, instruction_id, 32'hDEADBEEF); // vadd.vx
+        xif_model.send_instruction(make_arith(6'b000000, 5'd3, 5'hC, 5'd2, FMT_OPIVX), 1, instruction_id, 32'hDEADBEEF, 0); // vadd.vx
         instruction_id++;
 
         @(posedge clk_i);
         wait(x_issue_resp.accept);
-        xif_model.send_instruction(make_arith(6'b000000, 5'd5, 5'd3, 5'd4, FMT_OPIVV), 1, instruction_id, 0); // vadd.vv
+        xif_model.send_instruction(make_arith(6'b000000, 5'd5, 5'd3, 5'd4, FMT_OPIVV), 1, instruction_id, 0, 0); // vadd.vv
         instruction_id++;
 
         @(posedge clk_i);
         wait(x_issue_resp.accept);
-        xif_model.send_instruction(make_arith(6'b000101, 5'd6, 5'd3, 5'd4, FMT_OPIVV), 1, instruction_id, 0); // vminu.vv
+        xif_model.send_instruction(make_arith(6'b000101, 5'd6, 5'd3, 5'd4, FMT_OPIVV), 1, instruction_id, 0, 0); // vminu.vv
+        instruction_id++;
+
+        @(posedge clk_i);
+        vtype = make_vtype(SEW_16, LMUL_1, VTA, VMA);
+        xif_model.send_instruction(make_vsetivli(5'd5, 5'd4, vtype), 1, instruction_id, 0, 0);
+        instruction_id++;
+
+        @(posedge clk_i);
+        // wait(x_issue_resp.accept);  
+        xif_model.send_instruction(make_arith(6'b000000, 5'd6, 5'h3, 5'd4, FMT_OPIVX), 1, instruction_id, 32'hDEADBEEF, 0); // vadd.vx
         instruction_id++;
 
         // Wait for last instruction to finish

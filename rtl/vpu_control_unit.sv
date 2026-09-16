@@ -80,7 +80,7 @@ import vpu_pkg::*;
     // vcsr  --NA
 
     vec_instr_e             issue_instr_op;
-    logic                   vtype_valid, vtype_supported;
+    logic                   vtype_valid, vtype_supported, csr_res_push;
     x_issue_fifo_res_t      csr_fifo_res;
     logic                   csr_lecture_valid;
     logic [X_RFW_WIDTH-1:0] csr_lecture;
@@ -174,7 +174,8 @@ import vpu_pkg::*;
     // RESULT FIFO
     // assign fifo_res_push = x_fifo_res_i.result_valid_exec_o & ~fifo_res_full;   // Result coming from execution block
     assign fifo_res_push = (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL || issue_instr_op == CSRRS) 
-                                ? ((vtype_valid || csr_lecture_valid) & ~fifo_res_full)  // Result from CSRs
+                                ? (csr_res_push & ~fifo_res_full)  // Result from CSRs
+                                // ? ((vtype_valid || csr_lecture_valid) & ~fifo_res_full)  // Result from CSRs
                                 : (x_fifo_res_i.result_valid_exec_o & ~fifo_res_full);   // Result from execution block TODO:under dev. 
     assign fifo_res_pop  =  x_result_ready_i & ~fifo_res_empty; // Pop from result FIFO when FIFO is not empty and the result is accepted by the CPU
 
@@ -470,17 +471,21 @@ import vpu_pkg::*;
 
     always_ff @(posedge clk_i or negedge rst_ni) begin 
         if (!rst_ni) begin
-            vlmax_q <= '0;
-            vtype_q <= '0;
-            vl_q <= '0;
+            vlmax_q  <= '0;
+            vtype_q  <= '0;
+            vl_q     <= '0;
             vstart_q <= '0;
-            vlenb_q <= '0;
+            vlenb_q  <= '0;
+
+            csr_res_push <= '0;
         end  else begin
             vlmax_q <= vlmax_d;
             vtype_q <= vtype_d;
             vl_q <= vl_d;
             vstart_q <= vstart_d;
             vlenb_q <= vlenb_d;  
+
+            csr_res_push <= (vtype_valid || csr_lecture_valid);
         end
     end
 

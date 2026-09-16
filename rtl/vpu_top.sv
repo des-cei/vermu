@@ -120,12 +120,12 @@ import vpu_pkg::*;
         .if_wrapper_exe_vsld (xif_exe_vsld_i.xif_wrapper)
     );
 
-    execution_units vlsu_i 
-    (
-        .clk_i,
-        .rst_ni,
-        .if_exe_wrapper (xif_exe_vlsu_i.exe_unit)
-    );
+    // execution_units vlsu_i 
+    // (
+    //     .clk_i,
+    //     .rst_ni,
+    //     .if_exe_wrapper (xif_exe_vlsu_i.exe_unit)
+    // );
 
     execution_units vsld_i 
     (
@@ -179,7 +179,7 @@ import vpu_pkg::*;
         .clk_i             (clk_i),   
         .rst_ni            (rst_ni),
         .data_i            (vrf_rdata1[FU_VLSU]),   // TODO: rdata1?
-        .data_o            (vrf_wdata[FU_VLSU]),
+        .data_o            (vlsu_result),
         .if_exe_wrapper    (xif_exe_vlsu_i.exe_unit),
         .masters_resp_i    (masters_resp_i),
         .masters_req_o     (masters_req_o) 

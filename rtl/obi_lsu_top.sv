@@ -104,7 +104,8 @@ import vpu_pkg::*;
             end
         endcase
 
-        element_count = int'(instr_req.vl);
+        // element_count = int'(instr_req.vl);
+        element_count = int'(if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements);
         elements_per_port = (element_bytes_d == 0) ? 0 : DATA_BYTES / element_bytes_d;  // max_elem_per_port
         stride_value = (instr_req.mop == 2'b10) ? int'(instr_req.rs2_data) :
                        int'(element_bytes_d);   // TODO: other mop cases
@@ -265,11 +266,11 @@ import vpu_pkg::*;
 
     a_vl_fits_ports :
     assert property (@(posedge clk_i) disable iff (!rst_ni)
-        (instr_req.vl <= (PORTS * DATA_BYTES / element_bytes_d))
+        (if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements <= (PORTS * DATA_BYTES / element_bytes_d))
     )
     else $error(
-        "VL (%0d) exceeds maximum supported elements (%0d)",
-        instr_req.vl,
+        "Iteration vl (%0d) exceeds maximum supported elements (%0d)",
+        if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements,
         (PORTS * DATA_BYTES / element_bytes_d)
     );
 

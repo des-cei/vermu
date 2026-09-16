@@ -48,7 +48,7 @@ module vpu_dispatch
 
     // Issue outputs to FUs
     logic [MAX_INFLIGHT-1:0]   fu_instr_valid;      
-    vpu_compl_issue_t [MAX_INFLIGHT-1:0] fu_instr_issue;
+    vpu_compl_issue_t [MAX_INFLIGHT-1:0] fu_instr_issue, fu_instr_issue_d, fu_instr_issue_q;
 
     // FU inputs back to dispatcher
     logic [MAX_INFLIGHT-1:0]                fu_recv_instr_ready; // FU ready for next fragment
@@ -307,8 +307,8 @@ module vpu_dispatch
 
     always_comb begin
         fu_instr_valid = '0;
-        fu_instr_issue = '0;
-
+        fu_instr_issue = fu_instr_issue_q;
+        fu_instr_issue_d = fu_instr_issue_q;
         dispatch_last = '0;
 
         for (int i = 0; i < MAX_INFLIGHT; i++) begin
@@ -343,11 +343,21 @@ module vpu_dispatch
                 fu_instr_issue[i].instr_issue    = issue;
                 fu_instr_issue[i].instr_decoded  = slot_q[i].decoded;
                 fu_instr_issue[i].instr_fragment = dispatch_last[i];
+
+                fu_instr_issue_d[i] = fu_instr_issue[i];
             end
         end
     end
 
-
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            for (int i = 0; i < MAX_INFLIGHT; i++)
+                fu_instr_issue_q[i] <= '0;
+        end else begin
+            fu_instr_issue_q <= fu_instr_issue_d;
+        end
+    end
+    
     /////////////////////////////////////////////
     // New instruction dispatch to a free slot //
     /////////////////////////////////////////////

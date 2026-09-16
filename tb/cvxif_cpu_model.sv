@@ -160,11 +160,14 @@ import vpu_pkg::*;
         input logic [31:0] instr,
         input hartid_t     hartid,
         input id_t         id,
-        input logic [31:0] rs1
+        input logic [31:0] rs1,
+        input logic [31:0] rs2
     );
         x_issue_req_t req;
         x_register_t register;
         vec_funct3_e fmt;
+        major_opcode_e opcode;        
+        int unsigned cycles;
 
         req = '0;
 
@@ -177,16 +180,32 @@ import vpu_pkg::*;
         register = '0;
 
         fmt = vec_funct3_e'(instr[14:12]);
+        opcode = major_opcode_e'(instr[6:0]);
 
-        if (fmt == FMT_OPCFG_CSRRCI || fmt == FMT_OPIVX) begin
-            register.rs_valid = 3'b001;
-            register.rs[0] = rs1;
+        if (opcode == OPCODE_OP_V) begin
+            if (fmt == FMT_OPCFG_CSRRCI || fmt == FMT_OPIVX) begin
+                register.rs_valid = 3'b001;
+                register.rs[0] = rs1;
+            end
+        end else if (opcode == OPCODE_LOAD || opcode == OPCODE_STORE) begin
+                register.rs_valid = 3'b011;
+                register.rs[0] = rs1;
+                register.rs[1] = rs2;
         end
 
         reg_queue.push_back(register);
 
         $display("[%0t] CVXIF MODEL: Instruction queued, id=%0d",
                  $time, req.id);
+
+        cycles = 0;
+        while (!x_result_valid_i) begin
+            @(posedge clk_i);
+            cycles++;
+            if (cycles > 50)
+                $fatal(1, "Timed out waiting.");
+        end
+        $display("Operation lasted: %d cycles.", cycles);
     endtask
 
 
