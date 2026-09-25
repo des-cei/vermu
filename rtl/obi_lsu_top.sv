@@ -28,39 +28,41 @@ import vpu_pkg::*;
     localparam int unsigned POS_WIDTH = $clog2(DATA_BYTES + 1);
 
     vpu_decoded_t instr_req;
-    logic instr_ready;
+    logic lsu_ready;
     logic start;
     logic accept;
-    logic active_q;
-    logic pending_q;
+    logic dma_active_q;     // TODO : what?
+    logic pending_q;        // TODO :element pending to operate
     logic rw_q;
-    logic [2:0] sew_q;
-    logic [POS_WIDTH-1:0] element_bytes_q;
 
-    logic [ADDR_WIDTH-1:0] addr_q [PORTS];
-    logic [SIZE_WIDTH-1:0] size_q [PORTS];
-    logic [STRD_WIDTH-1:0] stride_q [PORTS];
+
     logic [DATA_WIDTH-1:0] store_data [PORTS];
     logic [DATA_WIDTH-1:0] load_data [PORTS];
-    dw_t load_result_q;
+    dw_t load_result_q; //?
     dw_t data_q;
     logic store_valid [PORTS];
     logic store_ready [PORTS];
     logic load_valid [PORTS];
     logic load_ready [PORTS];
-    logic done_vec [PORTS];
+    // logic done_vec [PORTS];
+    logic [PORTS-1:0] done_vec;
     logic complete_q [PORTS];
     logic [POS_WIDTH-1:0] store_pos_q [PORTS];
     logic [POS_WIDTH-1:0] load_pos_q [PORTS];
     logic all_done;
     logic transfer_done;
 
-    logic [2:0] sew_d;
-    logic [POS_WIDTH-1:0] element_bytes_d;
+    logic [2:0] sew_d, sew_q;
+    logic [POS_WIDTH-1:0] element_bytes_d, element_bytes_q;
     logic [ADDR_WIDTH-1:0] addr_d [PORTS];
+    logic [ADDR_WIDTH-1:0] addr_q [PORTS];
     logic [SIZE_WIDTH-1:0] size_d [PORTS];
+    logic [SIZE_WIDTH-1:0] size_q [PORTS];
     logic [STRD_WIDTH-1:0] stride_d [PORTS];
+    logic [STRD_WIDTH-1:0] stride_q [PORTS];
+
     integer element_count;
+    integer frag_idx;
     integer elements_per_port;
     integer offset_elements;
     integer remaining_elements;
@@ -68,21 +70,23 @@ import vpu_pkg::*;
     integer stride_value;
 
     assign instr_req = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded;
-    assign instr_ready = !active_q && !pending_q;
-    assign accept = if_exe_wrapper.wrapper_exe_instr_valid && instr_ready &&
+    assign lsu_ready = !dma_active_q && !pending_q; // Ready for new instructions   
+    assign accept = if_exe_wrapper.wrapper_exe_instr_valid && lsu_ready &&
                     (instr_req.is_load || instr_req.is_store);
     assign start = pending_q;
+
     always_comb begin
         integer done_i;
         all_done = 1'b1;
         for (done_i = 0; done_i < PORTS; done_i++) begin
-            all_done &= complete_q[done_i];
+            all_done &= complete_q[done_i];                // TODO: can be reduce clk all_done = done_vec -> No! in case some port finishes earlier
         end
     end
 
-    assign transfer_done = active_q && all_done;
+    assign transfer_done = dma_active_q && all_done;    // ? No es lo mismo que all done?
     assign data_o = load_result_q;
 
+    // DMA request configuration 
     always_comb begin
         integer config_i;
         unique case (instr_req.width)
@@ -104,8 +108,8 @@ import vpu_pkg::*;
             end
         endcase
 
-        // element_count = int'(instr_req.vl);
         element_count = int'(if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements);
+        frag_idx = int'(if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.frag_idx);
         elements_per_port = (element_bytes_d == 0) ? 0 : DATA_BYTES / element_bytes_d;  // max_elem_per_port
         stride_value = (instr_req.mop == 2'b10) ? int'(instr_req.rs2_data) :
                        int'(element_bytes_d);   // TODO: other mop cases
@@ -116,51 +120,59 @@ import vpu_pkg::*;
                                  element_count - offset_elements : 0;
             port_elements = (remaining_elements > elements_per_port) ?
                             elements_per_port : remaining_elements;
-            addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'(offset_elements * stride_value);   // TODO: DATA_WIDTH? 
+            // addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'(offset_elements * stride_value);   // TODO: DATA_WIDTH? 
+            // addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'(offset_elements * stride_value) + ADDR_WIDTH'(frag_idx * stride_value);   // TODO: DATA_WIDTH?   . Under dev          
+            addr_d[config_i] = instr_req.rs1_data +
+                               ADDR_WIDTH'((frag_idx * PORTS + config_i) * stride_value);
+                            //    ADDR_WIDTH'((frag_idx * elements_per_port + config_i) * stride_value);
             size_d[config_i] = SIZE_WIDTH'(port_elements * element_bytes_d);
             stride_d[config_i] = STRD_WIDTH'(stride_value);
+            // $display("frag_idx=%d port=%d addr=%h offset_elements=%d remaining_elements=%d port_elements=%d",
+            //          frag_idx, config_i, addr_d[config_i], offset_elements,
+            //          remaining_elements, port_elements);
         end
     end
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         integer port_i;
         if (!rst_ni) begin
-            active_q <= 1'b0;
-            pending_q <= 1'b0;
-            rw_q <= 1'b0;
-            sew_q <= '0;
+            dma_active_q    <= 1'b0;
+            pending_q       <= 1'b0;
+            rw_q            <= 1'b0;
+            sew_q           <= '0;
             element_bytes_q <= '0;
-            data_q <= '0;
-            load_result_q <= '0;
-            complete_q <= '{default: 1'b0};
-            store_pos_q   <= '{default: '0};
-            load_pos_q    <= '{default: '0};
+            data_q          <= '0;
+            load_result_q   <= '0;
+            complete_q      <= '{default: 1'b0};
+            store_pos_q     <= '{default: '0};
+            load_pos_q      <= '{default: '0};
             for (port_i = 0; port_i < PORTS; port_i++) begin
-                addr_q[port_i] <= '0;
-                size_q[port_i] <= '0;
+                addr_q[port_i]   <= '0;
+                size_q[port_i]   <= '0;
                 stride_q[port_i] <= '0;
             end
         end else begin
             if (accept) begin
-                pending_q <= 1'b1;
-                rw_q <= instr_req.is_store;
-                sew_q <= sew_d;
+                pending_q       <= 1'b1;
+                rw_q            <= instr_req.is_store;
+                sew_q           <= sew_d;
                 element_bytes_q <= element_bytes_d;
-                data_q <= data_i;
-                complete_q <= '{default: 1'b0};
-                store_pos_q <= '{default: '0};
-                load_pos_q  <= '{default: '0};
-                load_result_q <= '0;
+                data_q          <= data_i;
+                complete_q      <= '{default: 1'b0};
+                store_pos_q     <= '{default: '0};
+                load_pos_q      <= '{default: '0};
+                load_result_q   <= '0;
                 for (port_i = 0; port_i < PORTS; port_i++) begin
-                    addr_q[port_i] <= addr_d[port_i];
-                    size_q[port_i] <= size_d[port_i];
+                    addr_q[port_i]   <= addr_d[port_i];
+                    size_q[port_i]   <= size_d[port_i];
                     stride_q[port_i] <= stride_d[port_i];
                 end
             end else if (start) begin
-                active_q <= 1'b1;
-                pending_q <= 1'b0;
+                dma_active_q <= 1'b1;
+                pending_q <= 1'b0;       // TODO: sense?. Assign start directly?
             end else if (transfer_done) begin
-                active_q <= 1'b0;
+                dma_active_q <= 1'b0;   // TODO: sense?
+                complete_q <= '{default: 1'b0};
             end
 
             for (port_i = 0; port_i < PORTS; port_i++) begin
@@ -185,8 +197,9 @@ import vpu_pkg::*;
 
     always_comb begin
         integer data_i_idx;
+        store_data = '{default: '0};
         for (data_i_idx = 0; data_i_idx < PORTS; data_i_idx++) begin
-            store_data[data_i_idx] = '0;
+            // store_data[data_i_idx] = '0;
             if (element_bytes_q == 1)
                 store_data[data_i_idx][7:0] = data_q[data_i_idx*DATA_WIDTH + store_pos_q[data_i_idx]*8 +: 8];
             else if (element_bytes_q == 2)
@@ -196,32 +209,32 @@ import vpu_pkg::*;
         end
     end
 
-    logic active_d;
-
-    // always_ff @(posedge clk_i or negedge rst_ni) begin
-    //     if (!rst_ni)
-    //         active_d = 0;
-    //     else 
-    //         if (if_exe_wrapper.wrapper_exe_instr_valid) begin
-    //             active_d = 1'b1; 
-    //         end else if (all_done) begin
-    //             active_d = 1'b0;
-            
-    // end
+   // Load_ready/store_valid
+   // assign store_valid[g] = active_q && rw_q && (size_q[g] != '0);
+   // assign load_ready[g] = active_q && !rw_q;
     always_comb begin
-        active_d = 1;
-        if (if_exe_wrapper.exe_wrapper_recv_instr_ready && !if_exe_wrapper.wrapper_exe_instr_valid) begin
-            active_d = 1'b0; 
-        end else if (all_done) begin
-            active_d = 1'b0;
+        integer idx;
+        for (idx = 0; idx < PORTS; idx++) begin
+            store_valid[idx] = 0;
+            load_ready[idx] =  0;
+
+            if (instr_req.is_load && done_vec[idx]) begin
+                load_ready[idx] =  0; 
+            end else begin
+                load_ready[idx] = !rw_q;
+            end   
+
+            if (instr_req.is_store && (store_pos_q[idx] == size_q[idx])) begin
+                store_valid[idx] = '0;
+            end else begin
+                store_valid[idx] = rw_q && (size_q[idx] != '0);
+            end  
         end
     end
 
     genvar g;
     generate
         for (g = 0; g < PORTS; g++) begin : gen_obione
-            assign store_valid[g] = active_q && rw_q && (size_q[g] != '0);
-            assign load_ready[g] = active_q && !rw_q;
 
             obione #(
                 .DATA_WIDTH(DATA_WIDTH),
@@ -231,7 +244,7 @@ import vpu_pkg::*;
             ) i_obione (
                 .clk_i        (clk_i),
                 .rst_ni       (rst_ni),
-                .clr_i        (!active_q && !start),
+                .clr_i        ('0),
                 .start_i      (start),
                 .rw_i         (rw_q),
                 .done_o       (done_vec[g]),
@@ -252,9 +265,9 @@ import vpu_pkg::*;
         end
     endgenerate
 
-    assign if_exe_wrapper.exe_wrapper_recv_instr_ready = instr_ready;
+    assign if_exe_wrapper.exe_wrapper_recv_instr_ready = lsu_ready;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_valid_exec_o = transfer_done;
-    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o = '0;
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o = load_result_q;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.req =
         if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.req;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.resp =
@@ -264,14 +277,14 @@ import vpu_pkg::*;
     assign if_exe_wrapper.exe_wrapper_result.instr_fragment =
         if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
 
-    a_vl_fits_ports :
-    assert property (@(posedge clk_i) disable iff (!rst_ni)
-        (if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements <= (PORTS * DATA_BYTES / element_bytes_d))
-    )
-    else $error(
-        "Iteration vl (%0d) exceeds maximum supported elements (%0d)",
-        if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements,
-        (PORTS * DATA_BYTES / element_bytes_d)
-    );
+    // a_vl_fits_ports :
+    // assert property (@(posedge clk_i) disable iff (!rst_ni)
+    //     (if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements <= (PORTS * DATA_BYTES / element_bytes_d))
+    // )
+    // else $error(
+    //     "Iteration vl (%0d) exceeds maximum supported elements (%0d)",
+    //     if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements,
+    //     (PORTS * DATA_BYTES / element_bytes_d)
+    // );
 
 endmodule

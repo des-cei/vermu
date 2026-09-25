@@ -13,6 +13,7 @@ module vpu_dispatch
     input  vpu_decoded_t               disp_decoded_i,   // decoded fields
     input  vpu_issue_t                 disp_issue_i,     // CV-X-IF 
     output logic                       disp_ready_o,     // pop instr_fifo 
+    output logic                       disp_empty_o,     // no dispatched work remains
     input  logic                       kill_valid_i,
     input  logic [X_HARTID_WIDTH-1:0]  kill_hartid_i,
     input  logic [X_ID_WIDTH-1:0]      kill_id_i,
@@ -54,24 +55,34 @@ module vpu_dispatch
     logic [MAX_INFLIGHT-1:0]                fu_recv_instr_ready; // FU ready for next fragment
     vpu_issue_fifo_res_t [MAX_INFLIGHT-1:0] fu_result;           // FU result (per fragment)
 
+    // Completed last fragments wait here until all older instructions have
+    // completed and the result FIFO can accept them.
+    logic [MAX_INFLIGHT-1:0]                 result_pending_q, result_pending_d;
+    x_issue_fifo_res_t [MAX_INFLIGHT-1:0]    result_pending_data_q, result_pending_data_d;
+    logic [MAX_INFLIGHT-1:0]                 slot_valid;
+
+    for (genvar i = 0; i < MAX_INFLIGHT; i++) begin : gen_slot_valid
+        assign slot_valid[i] = slot_q[i].valid;
+    end
+
     // VALU 
     assign fu_valu.wrapper_exe_instr_valid       = fu_instr_valid[FU_VALU];
     assign fu_valu.wrapper_exe_instr_issue       = fu_instr_issue[FU_VALU];
-    assign fu_valu.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i; 
+    assign fu_valu.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i && !result_pending_q[FU_VALU];
     assign fu_recv_instr_ready[FU_VALU]          = fu_valu.exe_wrapper_recv_instr_ready;
     assign fu_result[FU_VALU]                    = fu_valu.exe_wrapper_result;
 
     // VLSU 
     assign fu_vlsu.wrapper_exe_instr_valid       = fu_instr_valid[FU_VLSU];
     assign fu_vlsu.wrapper_exe_instr_issue       = fu_instr_issue[FU_VLSU];
-    assign fu_vlsu.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i;
+    assign fu_vlsu.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i && !result_pending_q[FU_VLSU];
     assign fu_recv_instr_ready[FU_VLSU]          = fu_vlsu.exe_wrapper_recv_instr_ready;
     assign fu_result[FU_VLSU]                    = fu_vlsu.exe_wrapper_result;
 
     // VSLD 
     assign fu_vsld.wrapper_exe_instr_valid       = fu_instr_valid[FU_VSLD];
     assign fu_vsld.wrapper_exe_instr_issue       = fu_instr_issue[FU_VSLD];
-    assign fu_vsld.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i;
+    assign fu_vsld.wrapper_exe_recv_result_ready = ~x_fifo_res_full_i && !result_pending_q[FU_VSLD];
     assign fu_recv_instr_ready[FU_VSLD]          = fu_vsld.exe_wrapper_recv_instr_ready;
     assign fu_result[FU_VSLD]                    = fu_vsld.exe_wrapper_result;
 
@@ -80,17 +91,18 @@ module vpu_dispatch
         input sew_e vsew,     
         input logic [3:0] lmul_val  
     );
-        logic [FRAG_CNT_W-1:0] epf;       // elements per fragment
-        logic [FRAG_CNT_W-1:0] tf;
-        logic [FRAG_CNT_W-1:0] max_frags;
+        int unsigned epf;       // elements per fragment
+        int unsigned tf;
+        int unsigned max_frags;
 
         case (vsew)
-            SEW_8:   epf = FRAG_CNT_W'(DW /  8);  
-            SEW_16:  epf = FRAG_CNT_W'(DW / 16);  
-            default: epf = FRAG_CNT_W'(DW / 32);  
+            SEW_8:   epf = DW /  8;  
+            SEW_16:  epf = DW / 16;  
+            default: epf = DW / 32;  
         endcase
         if (epf == '0) epf = 1;  // TODO: not real
-        tf        = (FRAG_CNT_W'(vl) + epf - 1) / epf;
+        tf        = (vl + epf - 1) / epf;
+        if (vl != 0 && tf == 0) tf = 1;
 
         // $display(
             // "vl=%0d vsew=%0d DW=%0d epf=%0d tf(before)=%0d N_IPU=%0d lmul_val=%0d limit=%0d",
@@ -104,7 +116,7 @@ module vpu_dispatch
             // VPU_N_IPU * lmul_val
         // );
 
-        max_frags = FRAG_CNT_W'(FRAGS_PER_REG) * FRAG_CNT_W'(lmul_val);
+        max_frags = FRAGS_PER_REG * lmul_val;
         if (max_frags == '0) max_frags = 1;
         if (tf > max_frags) tf = max_frags;
 
@@ -115,7 +127,7 @@ module vpu_dispatch
         //     (tf > FRAG_CNT_W'(VPU_N_IPU * lmul_val))
         // );
 
-        return tf;
+        return FRAG_CNT_W'(tf);
     endfunction
 
     function automatic vl_t calc_elements_for_frag(
@@ -153,6 +165,16 @@ module vpu_dispatch
         endcase
     endfunction
 
+    function automatic logic id_is_older(
+        input logic [X_ID_WIDTH-1:0] older_id,
+        input logic [X_ID_WIDTH-1:0] newer_id
+    );
+        logic [X_ID_WIDTH-1:0] age;
+
+        age = newer_id - older_id;
+        return (age != '0) && !age[X_ID_WIDTH-1];
+    endfunction
+
     /////////////////////////////////
     // Per-slot address derivation //
     /////////////////////////////////
@@ -165,7 +187,8 @@ module vpu_dispatch
             // Which register in LMUL group
             reg_offset[i]  = REG_OFF_W'(slot_q[i].next_frag / FRAGS_PER_REG);
             // Which slice within register
-            frag_in_reg[i] = slot_q[i].next_frag[$clog2(FRAGS_PER_REG)-1:0]; 
+            // frag_in_reg[i] = slot_q[i].next_frag[$clog2(FRAGS_PER_REG)-1:0];
+            frag_in_reg[i] = slot_q[i].next_frag % FRAGS_PER_REG;
         end
     end
 
@@ -193,6 +216,11 @@ module vpu_dispatch
                 if (p == s)            continue;
                 if (!slot_q[p].valid)  continue;
 
+                // A consumer must never wait for a younger producer. The
+                // instruction ID establishes program order when slots overlap.
+                if (!id_is_older(slot_q[p].x_id, slot_q[s].x_id))
+                    continue;
+
                 // RAW: vs1 depends on p's vd
                 if (slot_q[s].uses_vs1) begin
                     if (cur_vs1 >= slot_q[p].vd_base && cur_vs1 <  slot_q[p].vd_base + 5'(slot_q[p].lmul_val)) begin
@@ -213,7 +241,7 @@ module vpu_dispatch
                         if (!slot_q[p].frag_done_mask[fg]) begin
                             slot_hazard[s] = 1'b1;
 
-                            // $display("%0t: RAW vs1, s=%0d p=%0d fg=%0d cur_vs1=%0d vd_base=%0d frag_in_reg=%0d FRAGS_PER_REG=%0d lmul=%0d",
+                            // $display("%0t: RAW vs1, s=%0d p=%0d fg of p's=%0d cur_vs1=%0d vd_base=%0d frag_in_reg=%0d FRAGS_PER_REG=%0d lmul=%0d",
                             //     $time, s, p, fg, cur_vs1, slot_q[p].vd_base, frag_in_reg[s], FRAGS_PER_REG, slot_q[p].lmul_val);
                         end
                     end
@@ -233,7 +261,7 @@ module vpu_dispatch
                             slot_hazard[s] = 1'b1;
 
                             // $display("%0t: RAW vs2, s=%0d p=%0d fg=%0d cur_vs2=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
-                                // $time, s, p, fg, cur_vs2, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].lmul_val);
+                            //     $time, s, p, fg, cur_vs2, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].lmul_val);
                         end
                     end
                 end
@@ -251,16 +279,12 @@ module vpu_dispatch
                             slot_hazard[s] = 1'b1;
 
                             // $display("%0t: RAW vd_src, s=%0d p=%0d fg=%0d cur_vd=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
-                                // $time, s, p, fg, cur_vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].lmul_val);
+                            //     $time, s, p, fg, cur_vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].lmul_val);
                         end
                     end
                 end
 
-                // WAW: both slots writing same register group
-                // Older instructions never wait for younger ones.
-                if (slot_q[p].x_id > slot_q[s].x_id)
-                    continue;
-
+                // WAW: both slots writing same register group.
                 if (cur_vd >= slot_q[p].vd_base &&
                     cur_vd <  slot_q[p].vd_base + 5'(slot_q[p].lmul_val))
                 begin
@@ -376,7 +400,7 @@ module vpu_dispatch
         else
             new_fu_id = 2'(FU_VALU);   // arith, reductions, mask ops
 
-        new_slot_free = !slot_q[new_fu_id].valid;
+        new_slot_free = !slot_q[new_fu_id].valid && !result_pending_q[new_fu_id];
 
     //     // Instruction-level WAW check
     //     begin
@@ -402,7 +426,8 @@ module vpu_dispatch
     end
 
     assign disp_ready_o = dispatch_fire;
-
+    assign disp_empty_o = !(|slot_valid) && !(|result_pending_q);
+    // assign disp_empty_o =!(|slot_issue_en) && !(|result_pending_q);
 
     //////////////////////
     // Next-state logic //
@@ -436,12 +461,13 @@ module vpu_dispatch
                 if (wb_frag[i] == slot_q[i].total_frags - 1)    // TODO: wb_is_last or wb_frag?
                     slot_d[i].valid = 1'b0;
             end
-                // $display("%0t: wb_valid=%0b wb_frag=%0d mask(before)=%b mask(after)=%b",
+                // $display("%0t: wb_valid=%0b wb_frag=%0d mask(before)=%b mask(after)=%b, total_frags_q=%0d",
                 //     $time,
                 //     wb_valid[i],
                 //     wb_frag[i],
                 //     slot_q[i].frag_done_mask,
-                //     slot_d[i].frag_done_mask);
+                //     slot_d[i].frag_done_mask,
+                //     slot_q[i].total_frags,);
         end
 
         // Advance next_frag when this cycle's issue was accepted
@@ -459,7 +485,8 @@ module vpu_dispatch
             vsew = disp_decoded_i.vtype.vsew;
 
             slot_d[new_fu_id].valid          = 1'b1;
-            slot_d[new_fu_id].vd_base        = disp_decoded_i.vd;
+            // slot_d[new_fu_id].vd_base        = disp_decoded_i.vd;
+            slot_d[new_fu_id].vd_base        = (disp_decoded_i.major_opcode == OPCODE_STORE) ? disp_decoded_i.vs3 : disp_decoded_i.vd;
             slot_d[new_fu_id].vs1_base       = disp_decoded_i.vs1;
             slot_d[new_fu_id].vs2_base       = disp_decoded_i.vs2;
             slot_d[new_fu_id].lmul_val       = lv;
@@ -490,13 +517,66 @@ module vpu_dispatch
     // XIF Result //
     ////////////////
 
-    always_comb begin  
+    logic [MAX_INFLIGHT-1:0] result_blocked;
+    integer                 selected_result;
+    logic [X_ID_WIDTH-1:0] selected_result_id;
+
+    always_comb begin
+        result_pending_d      = result_pending_q;
+        result_pending_data_d = result_pending_data_q;
+        result_blocked        = '0;
+        selected_result       = -1;
+        selected_result_id    = '1;
         x_fifo_res_o = '0;
+
+        // A completed result is blocked while any older instruction is still
+        // in flight. Results with gaps in their IDs are handled naturally.
         for (int i = 0; i < MAX_INFLIGHT; i++) begin
-            if (fu_result[i].xif_fifo_result.result_valid_exec_o && fu_result[i].instr_fragment.is_last)
-                x_fifo_res_o = fu_result[i].xif_fifo_result;
-        end 
-    end 
+            for (int j = 0; j < MAX_INFLIGHT; j++) begin
+                if (result_pending_q[i] && slot_q[j].valid &&
+                    id_is_older( slot_q[j].x_id, result_pending_data_q[i].issue_exec_o.req.id))
+                    // (slot_q[j].x_id < result_pending_data_q[i].issue_exec_o.req.id))
+                    result_blocked[i] = 1'b1;
+            end
+
+            if (result_pending_q[i] && !result_blocked[i] &&
+                ((selected_result < 0) ||
+                id_is_older( result_pending_data_q[i].issue_exec_o.req.id, selected_result_id ))) begin
+                //  (result_pending_data_q[i].issue_exec_o.req.id < selected_result_id))) begin
+                selected_result    = i;
+                selected_result_id = result_pending_data_q[i].issue_exec_o.req.id;
+            end
+        end
+
+        if (selected_result >= 0) begin
+            x_fifo_res_o = result_pending_data_q[selected_result];
+
+            // Keep valid asserted until the downstream result FIFO accepts it.
+            if (!x_fifo_res_full_i && x_fifo_res_o.result_valid_exec_o)
+                result_pending_d[selected_result] = 1'b0;
+        end
+
+        // Capture only the final fragment as an architectural result. The FU
+        // result interface is backpressured while its pending entry is full.
+        for (int i = 0; i < MAX_INFLIGHT; i++) begin
+            if (fu_result[i].xif_fifo_result.result_valid_exec_o &&
+                fu_result[i].instr_fragment.is_last && slot_q[i].valid &&
+                !result_pending_q[i]) begin
+                result_pending_d[i]      = 1'b1;
+                result_pending_data_d[i] = fu_result[i].xif_fifo_result;
+            end
+        end
+    end
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            result_pending_q      <= '0;
+            result_pending_data_q <= '0;
+        end else begin
+            result_pending_q      <= result_pending_d;
+            result_pending_data_q <= result_pending_data_d;
+        end
+    end
 
     ///////////////
     // Registers //

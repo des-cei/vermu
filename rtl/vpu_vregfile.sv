@@ -140,6 +140,12 @@ module vpu_vregfile
                 // default: bytes_per_element = sew_bits / 8;
             endcase
         end
+
+    // `ifndef SYNTHESIS
+    //         $display("[%0t] merge_write_data: fu=%0d fragment=%0d fragment_vl=%0d sew_bits=%0d bytes_per_element=%0d elements_per_fragment=%0d fragment_start=%0d result_data=%h old_vd=%h",
+    //                  $time, fu, fragment, fragment_vl, sew_bits, bytes_per_element,
+    //                  elements_per_fragment, fragment_start, result_data, old_vd);
+    // `endif
         
         for (int byte_index = 0; byte_index < FRAGB; byte_index++) begin
             element_index = byte_index / bytes_per_element;
@@ -159,9 +165,19 @@ module vpu_vregfile
             end else if ((global_element >= request.vl) && request.vtype.vta) begin
                 merged_data[8 * byte_index +: 8] = 8'hFF;
             end
+
+    // `ifndef SYNTHESIS
+    //             if ((byte_index % bytes_per_element) == 0)
+    //                 $display("[%0t] merge_write_data: element=%0d global_element=%0d in_body=%b enabled=%b",
+    //                          $time, element_index, global_element, element_in_body,
+    //                          element_enabled);
+    // `endif
             // Prestart and undisturbed elements retain old_vd.
         end
 
+    // `ifndef SYNTHESIS
+    //         $display("[%0t] merge_write_data: merged_data=%h", $time, merged_data);
+    // `endif
         return merged_data;
     endfunction
 
@@ -204,6 +220,31 @@ module vpu_vregfile
             end
         end
     end
+
+`ifndef SYNTHESIS
+    assert property (@(posedge clk_i) disable iff (!rst_ni)
+        // (rf_we[FU_VALU] && !decoded_req[FU_VALU].is_store && (vd[FU_VALU] < NRVREG) &&
+        (rf_we[FU_VALU] && (vd[FU_VALU] < NRVREG) &&
+         rf_we[FU_VLSU] && decoded_req[FU_VLSU].is_load && (vd[FU_VLSU] < NRVREG) &&
+         (vd[FU_VALU] == vd[FU_VLSU])) |->
+        (frag_idx[FU_VALU] != frag_idx[FU_VLSU])
+    ) else $error("VALU and VLSU write the same vector register and fragment");
+
+    assert property (@(posedge clk_i) disable iff (!rst_ni)
+        // (rf_we[FU_VALU] && !decoded_req[FU_VALU].is_store && (vd[FU_VALU] < NRVREG) &&
+        (rf_we[FU_VALU] && (vd[FU_VALU] < NRVREG) &&
+         rf_we[FU_VSLD] && (vd[FU_VSLD] < NRVREG) &&
+         (vd[FU_VALU] == vd[FU_VSLD])) |->
+        (frag_idx[FU_VALU] != frag_idx[FU_VSLD])
+    ) else $error("VALU and VSLD write the same vector register and fragment");
+
+    assert property (@(posedge clk_i) disable iff (!rst_ni)
+        (rf_we[FU_VLSU] && decoded_req[FU_VLSU].is_load && (vd[FU_VLSU] < NRVREG) &&
+         rf_we[FU_VSLD] && (vd[FU_VSLD] < NRVREG) &&
+         (vd[FU_VLSU] == vd[FU_VSLD])) |->
+        (frag_idx[FU_VLSU] != frag_idx[FU_VSLD])
+    ) else $error("VLSU and VSLD write the same vector register and fragment");
+`endif
 
 endmodule
 

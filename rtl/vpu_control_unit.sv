@@ -68,6 +68,7 @@ import vpu_pkg::*;
 
     vec_instr_e        vec_instr;
     logic              disp_ready;
+    logic              disp_empty;
     x_issue_fifo_res_t vpu_fifo_res;
 
     // CSR signals
@@ -81,9 +82,11 @@ import vpu_pkg::*;
 
     vec_instr_e             issue_instr_op;
     logic                   vtype_valid, vtype_supported, csr_res_push;
-    x_issue_fifo_res_t      csr_fifo_res;
+    x_issue_fifo_res_t      csr_fifo_res_d, csr_fifo_res_q;
     logic                   csr_lecture_valid;
     logic [X_RFW_WIDTH-1:0] csr_lecture;
+    logic                   prev_cfg_id_valid;
+    id_t                    prev_cfg_id;
 
     /////////////////////////
     // xif_wrapper signals //
@@ -155,6 +158,8 @@ import vpu_pkg::*;
 
     // COMMIT FIFO
     assign x_issue_ready_o = ~fifo_commit_full && ~fifo_instr_full && ~fifo_res_full && (fifo_commit_usage + fifo_instr_usage + fifo_res_usage < INSTR_DEPTH) && rs_valid_flag && rst_ni; // REAL FUNCTIONALITY, UNCOMMENT WHEN PROBLEM IS SORTED OUT! (rs_valid left out to avoid comb loops on the CPU side)
+    // assign x_issue_ready_o = ~fifo_commit_full && ~fifo_instr_full && ~fifo_res_full 
+    //                         && (fifo_commit_usage + fifo_instr_usage + fifo_res_usage < INSTR_DEPTH) && rs_valid_flag && rst_ni && (x_issue_req_i.id == x_result_o.id + 1); // REAL FUNCTIONALITY, UNCOMMENT WHEN PROBLEM IS SORTED OUT! (rs_valid left out to avoid comb loops on the CPU side)
 
     // Fire issue. Fire when the issue is valid, is ready to accept and the issue is ready. 
     assign fifo_commit_push = x_issue_valid_i && x_issue_ready_o && x_issue_resp_o.accept; //If issue transaction then issue_req and issue_resp go to fifo, if not accepted or kill they will be discarded later on
@@ -173,10 +178,12 @@ import vpu_pkg::*;
 
     // RESULT FIFO
     // assign fifo_res_push = x_fifo_res_i.result_valid_exec_o & ~fifo_res_full;   // Result coming from execution block
-    assign fifo_res_push = (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL || issue_instr_op == CSRRS) 
-                                ? (csr_res_push & ~fifo_res_full)  // Result from CSRs
-                                // ? ((vtype_valid || csr_lecture_valid) & ~fifo_res_full)  // Result from CSRs
-                                : (x_fifo_res_i.result_valid_exec_o & ~fifo_res_full);   // Result from execution block TODO:under dev. 
+    // assign fifo_res_push = (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL || issue_instr_op == CSRRS) 
+    //                             ? (csr_res_push & ~fifo_res_full)  // Result from CSRs
+    //                             : (x_fifo_res_i.result_valid_exec_o & ~fifo_res_full);   // Result from execution block  
+    assign fifo_res_push = csr_res_push
+                                ? ~fifo_res_full  // Result from CSRs
+                                : (vpu_fifo_res.result_valid_exec_o & ~fifo_res_full);  // TODO:under dev.
     assign fifo_res_pop  =  x_result_ready_i & ~fifo_res_empty; // Pop from result FIFO when FIFO is not empty and the result is accepted by the CPU
 
 
@@ -262,20 +269,17 @@ import vpu_pkg::*;
 
     // Multiple interface mode  //TODO: under dev
     // assign fifo_instr_pop = disp_ready && ~fifo_instr_empty;    // TODO: not in case of the CSRs
-    assign fifo_instr_pop = ((issue_instr_op == VSETVLI)  || 
-                             (issue_instr_op == VSETIVLI) || 
-                             (issue_instr_op == VSETVL)   || 
-                             (issue_instr_op == CSRRS)    || 
-                              disp_ready)
+        assign fifo_instr_pop = (((issue_instr_op == VSETVLI)  ||
+                                  (issue_instr_op == VSETIVLI) ||
+                                  (issue_instr_op == VSETVL)   ||
+                                  (issue_instr_op == CSRRS)) && disp_empty) ||
+                                  disp_ready
                             && ~fifo_instr_empty;
     // Interface: Execution block <-> FIFO_result
     // assign if_wrapper_exe_valu.wrapper_exe_recv_result_ready = ~fifo_res_full;      // TODO: possible hazards?
     // assign if_wrapper_exe_vlsu.wrapper_exe_recv_result_ready = ~fifo_res_full;       // TODO: possible hazards?
     // assign if_wrapper_exe_vsld.wrapper_exe_recv_result_ready = ~fifo_res_full;       // TODO: possible hazards?
-    assign x_fifo_res_i = ((issue_instr_op == VSETVLI) || 
-                          (issue_instr_op == VSETIVLI) || 
-                          (issue_instr_op == VSETVL)   ||
-                          (issue_instr_op == CSRRS)     ) ? csr_fifo_res : vpu_fifo_res; // TODO: not in case of the CSRs. 
+    assign x_fifo_res_i = csr_res_push ? csr_fifo_res_q : vpu_fifo_res;
 
     always_comb begin
         x_result_valid_o  = ~fifo_res_empty;
@@ -286,7 +290,7 @@ import vpu_pkg::*;
         x_result_o.data   = x_fifo_res_o.result_data_exec_o;  // Data processed by the custom instr
     end
 
-    assign  issue_instr_op = issue_instr_o.vec_instr;
+    assign  issue_instr_op = (disp_empty && fifo_res_empty) ? issue_instr_o.vec_instr : INSTR_NONE;
 
     ///////////////////
     // CSR Registers //
@@ -315,7 +319,8 @@ import vpu_pkg::*;
     endfunction
 
     // Compute vl according to the RISC-V rules (AVL, VLMAX)
-    function automatic logic [MAXVL_W-1:0] compute_new_vl(input int avl, input int vlmax);
+    function automatic logic [MAXVL_W-1:0] compute_new_vl( input logic [31:0] avl,
+                                                           input logic [MAXVL_W-1:0] vlmax);
         begin
             if (avl == 0) begin
                 compute_new_vl = 0;
@@ -343,7 +348,11 @@ import vpu_pkg::*;
         vl_d            = vl_q;
         vlmax_d         = vlmax_q;
 
-        if (fifo_instr_pop  && (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL )) begin
+        // if (fifo_instr_pop  && (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL )) begin
+        if (fifo_instr_pop &&
+            (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL)
+            && (!prev_cfg_id_valid || prev_cfg_id != issue_instr_o.instr_issue.req.id)) begin
+
             vtype_valid = 1'b1;
             vtype_supported = 1'b1;
 
@@ -478,6 +487,9 @@ import vpu_pkg::*;
             vlenb_q  <= '0;
 
             csr_res_push <= '0;
+            prev_cfg_id       <= '0;
+            prev_cfg_id_valid <= 1'b0;
+            csr_fifo_res_q <= '0;
         end  else begin
             vlmax_q <= vlmax_d;
             vtype_q <= vtype_d;
@@ -486,24 +498,37 @@ import vpu_pkg::*;
             vlenb_q <= vlenb_d;  
 
             csr_res_push <= (vtype_valid || csr_lecture_valid);
+            if (fifo_instr_pop &&
+                (issue_instr_op == VSETVLI ||
+                issue_instr_op == VSETIVLI ||
+                issue_instr_op == VSETVL)) begin
+                prev_cfg_id       <= issue_instr_o.instr_issue.req.id;
+                prev_cfg_id_valid <= 1'b1;
+            end
+            csr_fifo_res_q <= csr_fifo_res_d;
         end
     end
 
 
     always_comb begin
+        csr_fifo_res_d = '0;
+
         if (issue_instr_op == CSRRS) begin
-            csr_fifo_res.result_data_exec_o = csr_lecture;
+            csr_fifo_res_d.result_data_exec_o = csr_lecture;
         end else if (!((issue_instr_op != VSETIVLI) &&
                        (decoder_req.vs1 == '0)      &&
                        (decoder_req.vd == '0))) begin
-            csr_fifo_res.result_data_exec_o = X_RFW_WIDTH'(vl_d);
+            csr_fifo_res_d.result_data_exec_o = X_RFW_WIDTH'(vl_d);
         end else begin
-            csr_fifo_res.result_data_exec_o = '0;
+            csr_fifo_res_d.result_data_exec_o = '0;
         end
-        csr_fifo_res.result_valid_exec_o = (vtype_valid || csr_lecture_valid);
-        csr_fifo_res.issue_exec_o.req = issue_instr_o.instr_issue.req;  
-        csr_fifo_res.issue_exec_o.resp = issue_instr_o.instr_issue.resp; 
-        csr_fifo_res.issue_exec_o.register = issue_instr_o.instr_issue.register;    
+        if (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL) begin
+            csr_fifo_res_d.result_valid_exec_o = (vtype_valid || csr_lecture_valid);
+            csr_fifo_res_d.issue_exec_o.req = issue_instr_o.instr_issue.req;  
+            csr_fifo_res_d.issue_exec_o.resp = issue_instr_o.instr_issue.resp; 
+            csr_fifo_res_d.issue_exec_o.register = issue_instr_o.instr_issue.register;   
+        end
+ 
     end
 
     //////////////////////
@@ -519,7 +544,7 @@ import vpu_pkg::*;
         // .vec_instr_e (vec_instr_e)
     ) vpu_decoder_i (
         .clk_i             (clk_i),
-        .req_valid_i       (fifo_instr_pop),
+        .req_valid_i       (~fifo_instr_empty),
         .instr_req_i       (issue_instr_o),
         // .vec_instr_i       (vec_instr),
         .vtype_i           (vtype_q),
@@ -545,6 +570,7 @@ import vpu_pkg::*;
         .disp_decoded_i   (decoder_req),
         .disp_issue_i     (issue_instr_o),  
         .disp_ready_o     (disp_ready),
+        .disp_empty_o     (disp_empty),
         .kill_valid_i     ('0),
         .kill_hartid_i    ('0),
         .kill_id_i        ('0),

@@ -183,16 +183,6 @@ import vpu_pkg::*;
         .if_exe_wrapper    (xif_exe_vlsu_i.exe_unit),
         .masters_resp_i    (masters_resp_i),
         .masters_req_o     (masters_req_o) 
-        // .vpu_req_i         (vpu_req),
-        // .vl_i              (csr_vl),
-        // .vlmax_i           (vlmax),
-        // .state_was_busy_i  (state_was_busy),
-        // .vrf_rdata_i       (vrf_rdata2),
-        // .vrf_rdata_done_i  (done_r2),
-        // .vrf_wdata_o       (vrf_wdata),
-        // .lsu_vrf_we_o      (lsu_vrf_we),
-        // .lsu_rdata_valid_o (),
-        // .lsu_result_valid_o(lsu_result_valid),
     );
       
 /////// User ////////////

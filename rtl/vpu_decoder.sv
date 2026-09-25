@@ -757,9 +757,9 @@ import rvv_instr_pkg::*;
                 decoded_req_o.umop            = instr_req_i.instr_issue.req.instr[24:20]; 
                 decoded_req_o.width           = instr_req_i.instr_issue.req.instr[14:12];
                 decoded_req_o.uses_rs1_scalar = 1'b1;                                                        // base address
-                decoded_req_o.rs1_data        = (decoded_req_o.uses_rs1_scalar) ? instr_req_i.instr_issue.register.rs[1] : 0;
+                decoded_req_o.rs1_data        = (decoded_req_o.uses_rs1_scalar) ? instr_req_i.instr_issue.register.rs[0] : 0;
                 decoded_req_o.uses_rs2_scalar = (decoded_req_o.mop == 2'b10) ? 1'b1 : 1'b0;                      // stride
-                decoded_req_o.rs2_data        = (decoded_req_o.uses_rs2_scalar) ? instr_req_i.instr_issue.register.rs[0] : 0; 
+                decoded_req_o.rs2_data        = (decoded_req_o.uses_rs2_scalar) ? instr_req_i.instr_issue.register.rs[1] : 0; 
                 decoded_req_o.vs3             = instr_req_i.instr_issue.req.instr[11:7];
                 
                 decoded_req_o.uses_vd_src     = 1'b1;                                                        // vs3 = store data, same field as vd
@@ -773,12 +773,13 @@ import rvv_instr_pkg::*;
                 decoded_req_o.mop             = instr_req_i.instr_issue.req.instr[27:26];
                 decoded_req_o.umop            = instr_req_i.instr_issue.req.instr[24:20]; 
                 decoded_req_o.width           = instr_req_i.instr_issue.req.instr[14:12];
-                decoded_req_o.uses_rs1_scalar = (decoded_req_o.umop !=  5'b0100) ? 1'b1 : 1'b0;                   // base address
+                decoded_req_o.uses_rs1_scalar = (decoded_req_o.umop !=  5'b0100) ? 1'b1 : 1'b0;               // base address
                 decoded_req_o.rs1_data        = (decoded_req_o.uses_rs1_scalar) ? instr_req_i.instr_issue.register.rs[0] : 0; 
-                decoded_req_o.uses_rs2_scalar = (decoded_req_o.mop == 2'b10) ? 1'b1 : 1'b0;                       // stride
+                decoded_req_o.uses_rs2_scalar = (decoded_req_o.mop == 2'b10) ? 1'b1 : 1'b0;                   // stride
                 decoded_req_o.rs2_data        = (decoded_req_o.uses_rs2_scalar) ? instr_req_i.instr_issue.register.rs[1] : 0;
-                decoded_req_o.uses_vs2        = (decoded_req_o.mop == 2'b01) || (decoded_req_o.mop == 2'b11);         // index  
-                decoded_req_o.vs3             = instr_req_i.instr_issue.req.instr[11:7];
+                decoded_req_o.uses_vs2        = (decoded_req_o.mop == 2'b01) || (decoded_req_o.mop == 2'b11); // index  
+                decoded_req_o.vd              = instr_req_i.instr_issue.req.instr[11:7];
+                decoded_req_o.uses_vd_src     = 1'b1;
             end 
             else if (decoded_req_o.major_opcode == OPCODE_SYSTEM) begin                                        
                 decoded_req_o.vd = instr_req_i.instr_issue.req.instr[11:7];
