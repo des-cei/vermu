@@ -269,11 +269,11 @@ import vpu_pkg::*;
 
     // Multiple interface mode  //TODO: under dev
     // assign fifo_instr_pop = disp_ready && ~fifo_instr_empty;    // TODO: not in case of the CSRs
-        assign fifo_instr_pop = (((issue_instr_op == VSETVLI)  ||
+        assign fifo_instr_pop = ((((issue_instr_op == VSETVLI)  ||
                                   (issue_instr_op == VSETIVLI) ||
                                   (issue_instr_op == VSETVL)   ||
                                   (issue_instr_op == CSRRS)) && disp_empty) ||
-                                  disp_ready
+                                  disp_ready)
                             && ~fifo_instr_empty;
     // Interface: Execution block <-> FIFO_result
     // assign if_wrapper_exe_valu.wrapper_exe_recv_result_ready = ~fifo_res_full;      // TODO: possible hazards?
@@ -285,8 +285,10 @@ import vpu_pkg::*;
         x_result_valid_o  = ~fifo_res_empty;
         x_result_o.hartid = x_fifo_res_o.issue_exec_o.req.hartid; 
         x_result_o.id     = x_fifo_res_o.issue_exec_o.req.id; // Giving back the instr id
-        x_result_o.rd     = x_fifo_res_o.issue_exec_o.req.instr[11:7]; // Giving back the dest reg
-        x_result_o.we     = x_fifo_res_o.issue_exec_o.resp.writeback;
+        x_result_o.rd     = (x_fifo_res_o.issue_exec_o.req.instr[6:0] == 7'h57 || x_fifo_res_o.issue_exec_o.req.instr[6:0] ==7'h73) ?
+                             x_fifo_res_o.issue_exec_o.req.instr[11:7] : 0; // Giving back the dest reg
+        // x_result_o.we     = x_fifo_res_o.issue_exec_o.resp.writeback;
+        x_result_o.we     = (x_fifo_res_o.issue_exec_o.resp.writeback) ? x_result_valid_o : '0; // Make we single cycle
         x_result_o.data   = x_fifo_res_o.result_data_exec_o;  // Data processed by the custom instr
     end
 
@@ -298,7 +300,7 @@ import vpu_pkg::*;
     
     logic [XLEN-1:0] prov_avl, avl;
     logic [XLEN-1:0] vlmax_d, vlmax_q;
-    logic [5:0] int_lmul4;
+    logic [5:0] int_lmul4_d, int_lmul4_q;
 
     function automatic logic [MAXVL_W-1:0] compute_vlmax(sew_e       vsew,
                                                          logic [5:0] int_lmul4);
@@ -343,7 +345,7 @@ import vpu_pkg::*;
         vtype_valid     = 1'b0;
         vtype_supported = 1'b0;
         avl             = '0;
-        int_lmul4       = '0;
+        int_lmul4_d     = int_lmul4_q;
         vtype_d         = vtype_q;
         vl_d            = vl_q;
         vlmax_d         = vlmax_q;
@@ -365,15 +367,15 @@ import vpu_pkg::*;
             endcase
 
             unique case (decoder_req.vtype.vlmul) 
-                LMUL_F4:  int_lmul4 = 1;    
-                LMUL_F2:  int_lmul4 = 2;    
-                LMUL_1:   int_lmul4 = 4;    
-                LMUL_2:   int_lmul4 = 8; 
-                LMUL_4:   int_lmul4 = 16; 
-                LMUL_8:   int_lmul4 = 32; 
+                LMUL_F4:  int_lmul4_d = 1;    
+                LMUL_F2:  int_lmul4_d = 2;    
+                LMUL_1:   int_lmul4_d = 4;    
+                LMUL_2:   int_lmul4_d = 8; 
+                LMUL_4:   int_lmul4_d = 16; 
+                LMUL_8:   int_lmul4_d = 32; 
                 default: begin 
                     vtype_supported = 1'b0;
-                    int_lmul4 = 0;
+                    int_lmul4_d = 0;
                 end
             endcase
 
@@ -387,7 +389,7 @@ import vpu_pkg::*;
             end else begin
 
                 vtype_d = decoder_req.vtype;
-                vlmax_d = compute_vlmax(decoder_req.vtype.vsew, int_lmul4);
+                vlmax_d = compute_vlmax(decoder_req.vtype.vsew, int_lmul4_d);
 
                 if (issue_instr_op == VSETIVLI) begin
                     avl = prov_avl;
@@ -485,17 +487,19 @@ import vpu_pkg::*;
             vl_q     <= '0;
             vstart_q <= '0;
             vlenb_q  <= '0;
+            int_lmul4_q <= '0;
 
             csr_res_push <= '0;
             prev_cfg_id       <= '0;
             prev_cfg_id_valid <= 1'b0;
             csr_fifo_res_q <= '0;
         end  else begin
-            vlmax_q <= vlmax_d;
-            vtype_q <= vtype_d;
-            vl_q <= vl_d;
-            vstart_q <= vstart_d;
-            vlenb_q <= vlenb_d;  
+            vlmax_q     <= vlmax_d;
+            vtype_q     <= vtype_d;
+            vl_q        <= vl_d;
+            vstart_q    <= vstart_d;
+            vlenb_q     <= vlenb_d;  
+            int_lmul4_q <= int_lmul4_d;
 
             csr_res_push <= (vtype_valid || csr_lecture_valid);
             if (fifo_instr_pop &&

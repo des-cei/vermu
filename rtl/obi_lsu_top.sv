@@ -52,7 +52,7 @@ import vpu_pkg::*;
     logic all_done;
     logic transfer_done;
 
-    logic [2:0] sew_d, sew_q;
+    logic [2:0] eew_d, eew_q;
     logic [POS_WIDTH-1:0] element_bytes_d, element_bytes_q;
     logic [ADDR_WIDTH-1:0] addr_d [PORTS];
     logic [ADDR_WIDTH-1:0] addr_q [PORTS];
@@ -86,31 +86,34 @@ import vpu_pkg::*;
     assign transfer_done = dma_active_q && all_done;    // ? No es lo mismo que all done?
     assign data_o = load_result_q;
 
-    // DMA request configuration 
+    // DMA request configuration . EEW
     always_comb begin
         integer config_i;
         unique case (instr_req.width)
             3'b000: begin               // SEW_8
-                sew_d = 3'd3;
+                eew_d = 3'd3;
                 element_bytes_d = 1;
+                elements_per_port = DATA_BYTES;  // max_elem_per_port
             end
             3'b101: begin               // SEW_16
-                sew_d = 3'd4;
+                eew_d = 3'd4;
                 element_bytes_d = 2;
+                elements_per_port = DATA_BYTES / 2;  // max_elem_per_port
             end
             3'b110: begin               // SEW_32
-                sew_d = 3'd5;
+                eew_d = 3'd5;
                 element_bytes_d = 4;
+                elements_per_port = DATA_BYTES / 4; // max_elem_per_port
             end
             default: begin
-                sew_d = 3'd0;
+                eew_d = 3'd0;
                 element_bytes_d = 0;
+                elements_per_port = '0;
             end
         endcase
 
         element_count = int'(if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements);
         frag_idx = int'(if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.frag_idx);
-        elements_per_port = (element_bytes_d == 0) ? 0 : DATA_BYTES / element_bytes_d;  // max_elem_per_port
         stride_value = (instr_req.mop == 2'b10) ? int'(instr_req.rs2_data) :
                        int'(element_bytes_d);   // TODO: other mop cases
 
@@ -139,7 +142,7 @@ import vpu_pkg::*;
             dma_active_q    <= 1'b0;
             pending_q       <= 1'b0;
             rw_q            <= 1'b0;
-            sew_q           <= '0;
+            eew_q           <= '0;
             element_bytes_q <= '0;
             data_q          <= '0;
             load_result_q   <= '0;
@@ -155,7 +158,7 @@ import vpu_pkg::*;
             if (accept) begin
                 pending_q       <= 1'b1;
                 rw_q            <= instr_req.is_store;
-                sew_q           <= sew_d;
+                eew_q           <= eew_d;
                 element_bytes_q <= element_bytes_d;
                 data_q          <= data_i;
                 complete_q      <= '{default: 1'b0};
@@ -251,7 +254,7 @@ import vpu_pkg::*;
                 .addr_i       (addr_q[g]),
                 .size_i       (size_q[g]),
                 .stride_i     (stride_q[g]),
-                .sew_i        (sew_q),
+                .sew_i        (eew_q),
                 .master_req_o (masters_req_o[g]),
                 .master_resp_i(masters_resp_i[g]),
                 .data_i       (store_data[g]),
@@ -267,7 +270,7 @@ import vpu_pkg::*;
 
     assign if_exe_wrapper.exe_wrapper_recv_instr_ready = lsu_ready;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_valid_exec_o = transfer_done;
-    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o = load_result_q;
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o = '0;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.req =
         if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.req;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.resp =

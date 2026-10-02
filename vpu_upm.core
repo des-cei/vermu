@@ -9,7 +9,7 @@ filesets:
             - rtl/include/cvxif_types_pkg.sv
             - rtl/include/obi_pkg.sv
             - rtl/include/rvv_instr_pkg.sv
-            - rtl/include/vpu_pkg.sv
+            - build/generated/vpu_pkg.sv
             - rtl/if_xif_exe.sv
             # - rtl/load_store_unit_mis.sv
             - rtl/vendor/obione/rtl/obione.sv

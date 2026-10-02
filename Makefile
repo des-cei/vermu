@@ -8,6 +8,10 @@ PROJECT ?= vpu_compiler
 CORE_NAME ?= ceiupm::vpu_upm
 FUSESOC_TARGET ?= default
 BUILD_DIR ?= build
+VPU_N_IPU ?= 1
+VPU_VLEN ?= 128
+VPU_PKG_TEMPLATE ?= rtl/include/vpu_pkg.sv.tpl
+VPU_PKG_GENERATED ?= $(BUILD_DIR)/generated/vpu_pkg.sv
 # SIM_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name '*vpu_upm*' 2>/dev/null | sort -V | head -n 1)/sim-modelsim
 SIM_BASE_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name '*vpu_upm*' 2>/dev/null | sort -V | head -n 1)
 SIM_DIR ?= $(or $(wildcard $(SIM_BASE_DIR)/$(FUSESOC_TARGET)-modelsim),$(wildcard $(SIM_BASE_DIR)/sim-modelsim),$(firstword $(wildcard $(SIM_BASE_DIR)/*-modelsim)))
@@ -57,6 +61,7 @@ all: run-vpu-unit
 
 help:
 	@echo "Targets:"
+	@echo "  generate-vpu-pkg 		Generate VPU architecture"
 	@echo "  build-sw            	Build sw/build/main.S from sw/<PROJECT>/main.c"
 	@echo "  build-sim           	Run FuseSoC to elaborate the sim target (Questa)"
 	@echo "  run-vpu-unit        	Run VPU unit test in CLI"
@@ -69,6 +74,8 @@ help:
 	@echo "  FUSESOC_TARGET=<name>  vpu-sim for vermu sim"
 	@echo "  TB_FILE=<file>      	Testbench source file under tb/"
 	@echo "  QUESTA_LICENSE=<lic>	Optional, only if you want to force a license file"
+	@echo "  VPU_N_IPU=<number> 	Number of integer processing units (default: 1)"
+	@echo "  VPU_VLEN=<bits>   		Vector register length in bits (default: 128)"
 
 check-tools:
 	@echo "Checking tools and their resolved paths:"
@@ -78,6 +85,15 @@ check-tools:
 	@command -v $(FUSESOC) >/dev/null || (echo "Error: fusesoc not found"; exit 1)
 	@command -v $(RISCV_GCC) >/dev/null || (echo "Error: $(RISCV_GCC) not found"; exit 1)
 	@command -v $(RISCV_OBJDUMP) >/dev/null || (echo "Error: $(RISCV_OBJDUMP) not found"; exit 1)
+
+generate-vpu-pkg:
+	@case "$(VPU_N_IPU)" in ''|*[!0-9]*|0) echo "Error: VPU_N_IPU must be a positive integer"; exit 1;; esac
+	@case "$(VPU_VLEN)" in ''|*[!0-9]*|0) echo "Error: VPU_VLEN must be a positive integer"; exit 1;; esac
+	@test $$((VPU_VLEN % 8)) -eq 0 || (echo "Error: VPU_VLEN must be divisible by 8"; exit 1)
+	@test -f $(VPU_PKG_TEMPLATE) || (echo "Error: package template not found: $(VPU_PKG_TEMPLATE)"; exit 1)
+	@mkdir -p $(dir $(VPU_PKG_GENERATED))
+	@sed -e 's/@VPU_N_IPU@/$(VPU_N_IPU)/g' -e 's/@VPU_VLEN@/$(VPU_VLEN)/g' $(VPU_PKG_TEMPLATE) > $(VPU_PKG_GENERATED)
+	@echo "Generated $(VPU_PKG_GENERATED) (VPU_N_IPU=$(VPU_N_IPU), VPU_VLEN=$(VPU_VLEN))"
 
 build-sw:
 	@echo "--> Building sw..."

@@ -749,22 +749,23 @@ import rvv_instr_pkg::*;
                 VWMACCU_VV, VWMACCU_VX, VWMACC_VV, VWMACC_VX
                 };
             end
-            else if (decoded_req_o.major_opcode == OPCODE_STORE) begin                                      //is_store
+            else if (decoded_req_o.major_opcode == OPCODE_STORE) begin                                        //is_store
 
                 decoded_req_o.nf              = instr_req_i.instr_issue.req.instr[31:29];
                 decoded_req_o.mew             = instr_req_i.instr_issue.req.instr[28];
                 decoded_req_o.mop             = instr_req_i.instr_issue.req.instr[27:26];
                 decoded_req_o.umop            = instr_req_i.instr_issue.req.instr[24:20]; 
                 decoded_req_o.width           = instr_req_i.instr_issue.req.instr[14:12];
-                decoded_req_o.uses_rs1_scalar = 1'b1;                                                        // base address
+                decoded_req_o.uses_rs1_scalar = 1'b1;                                                         // base address
                 decoded_req_o.rs1_data        = (decoded_req_o.uses_rs1_scalar) ? instr_req_i.instr_issue.register.rs[0] : 0;
-                decoded_req_o.uses_rs2_scalar = (decoded_req_o.mop == 2'b10) ? 1'b1 : 1'b0;                      // stride
+                decoded_req_o.uses_rs2_scalar = (decoded_req_o.mop == 2'b10) ? 1'b1 : 1'b0;                   // stride
                 decoded_req_o.rs2_data        = (decoded_req_o.uses_rs2_scalar) ? instr_req_i.instr_issue.register.rs[1] : 0; 
                 decoded_req_o.vs3             = instr_req_i.instr_issue.req.instr[11:7];
                 
-                decoded_req_o.uses_vd_src     = 1'b1;                                                        // vs3 = store data, same field as vd
-                decoded_req_o.uses_vs2        = (decoded_req_o.mop == 2'b01) || (decoded_req_o.mop == 2'b11);        // index 
+                decoded_req_o.uses_vd_src     = 1'b1;                                                         // vs3 = store data, same field as vd
+                decoded_req_o.uses_vs2        = (decoded_req_o.mop == 2'b01) || (decoded_req_o.mop == 2'b11); // index 
                 
+                // decoded_req_o.emul            = (eew / sew) * lmul;
             end
             else if (decoded_req_o.major_opcode == OPCODE_LOAD) begin                                        //is_load
 

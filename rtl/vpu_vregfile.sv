@@ -86,7 +86,7 @@ module vpu_vregfile
         int global_element;
 
         mask = '0;
-        sew_bits = get_sew_bits(request.vtype.vsew);
+        sew_bits = get_sew_bits(request.vtype.vsew); //*
         bytes_per_element = sew_bits / 8;
         elements_per_fragment = (VPU_N_IPU * ELEN) / sew_bits;
         fragment_start = fragment * elements_per_fragment;
@@ -122,7 +122,7 @@ module vpu_vregfile
         logic element_in_body;
         logic element_enabled;
 
-        int unsigned FRAGB = VLENB / VPU_N_IPU;
+        int unsigned FRAGB = (VPU_N_IPU * ELEN) / 8;
 
         merged_data = old_vd;
         sew_bits = get_sew_bits(request.vtype.vsew);

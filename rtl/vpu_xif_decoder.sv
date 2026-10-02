@@ -41,8 +41,8 @@ import vpu_pkg::*;
     logic [4:0]    umop;
 
     always_comb begin: vproc_decoder
-        major_opcode    = '0;
-        fmt             = '0;
+        major_opcode    = OPCODE_NONE;
+        fmt             = FMT_OPIVV;
         vm              = '0;
         funct6          = '0;
         nf              = '0;
@@ -413,6 +413,9 @@ import vpu_pkg::*;
             
                 OPCODE_LOAD: begin
                     if (!mew) begin
+
+                        x_issue_resp_o.writeback = 1'b1;
+
                         unique case (mop)
                             2'b00: begin    // Unit-stride
                                 x_issue_resp_o.register_read = {1'b0, 1'b1};
@@ -527,6 +530,9 @@ import vpu_pkg::*;
                 // Todo: nf?
                 OPCODE_STORE: begin
                     if (!mew) begin
+
+                        x_issue_resp_o.writeback = 1'b1;
+
                         unique case (mop)
                             2'b00: begin // unit-stride
                                 x_issue_resp_o.register_read = {1'b0, 1'b1};

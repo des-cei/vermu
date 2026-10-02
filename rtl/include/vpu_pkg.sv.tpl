@@ -3,11 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
-// [STATIC] --> design-time
-// [FIXED]  --> defined by specification
-// [DYNAMIC]--> by user
-//
-// TODO: template for generic use cases.
+// This file is rendered by Makefile. Do not compile it directly.
 
 package vpu_pkg;
 
@@ -22,39 +18,33 @@ package vpu_pkg;
     localparam int unsigned XLEN = 32;  //[FIXED]
     // typedef logic [XLEN-1:0] xlen_t;    
     
-    // Maximum size of a single vector element in bits (ELEN ≥ 8)[FIXED]
+    // Maximum size of a single vector element in bits (ELEN >= 8)[FIXED]
     localparam int unsigned ELEN = 32;       
 
     // typedef logic [31:0] elen_t;    
     
-    // Number of bits in a vector register (in each of 32 registers). Min 32. [STATIC]
-    localparam int unsigned VPU_VLEN = 128;	             
+    // Number of bits in a vector register (in each of 32 registers). Min 32. [DYNAMIC]
+    localparam int unsigned VPU_VLEN = @VPU_VLEN@;             
     
-    // Number of Integer  Processing Units [STATIC]
-    localparam int unsigned VPU_N_IPU = 1;	             
+    // Number of Integer Processing Units [DYNAMIC]
+    localparam int unsigned VPU_N_IPU = @VPU_N_IPU@;             
 
     // Datapath width
     typedef logic [VPU_N_IPU*ELEN-1:0] dw_t;
 
     // Maximum Register Grouping [FIXED]
-    localparam int unsigned VPU_LMUL_MAX = 8;	             
+    localparam int unsigned VPU_LMUL_MAX = 8;             
     
-    typedef logic [VPU_VLEN-1:0] vlen_t; // TODO: ? 
+    typedef logic [VPU_VLEN-1:0] vlen_t;
 
     localparam int unsigned VLENB = VPU_VLEN / 8; 
     localparam int unsigned VLENB_W = $clog2(VPU_VLEN / 8 + 1); 
                   
-    // // Selected element width [DYNAMIC]
-    // localparam int unsigned SEW = 32; 	
-
     // Number of vector registers (RV32I) [FIXED]
     localparam int unsigned NRVREG = 32;
 
-    // typedef logic [$clog2(NRVREG)-1:0] vreg_t;
-    // typedef logic[$clog2(NRVREG)-1:0] addr_t;
-	
     // Maximum vector length in elements 
-    localparam int unsigned MAXVL  = VPU_VLEN * 8 / 8; // (VPU_VLEN * LMUL_MAX) / MIN_SEW
+    localparam int unsigned MAXVL  = VPU_VLEN * 8 / 8;
     localparam int unsigned MAXVL_W   = $clog2(MAXVL + 1);
 
     typedef logic [$clog2(MAXVL+1)-1:0] vl_t;      
@@ -93,20 +83,20 @@ package vpu_pkg;
     //Operand type for OP-V instructions and operand-format 
     typedef enum logic [2:0] {
         FMT_OPIVV        = 3'b000, 
-        FMT_OPFVV_CSRRW  = 3'b001,     //--N/A
-        FMT_OPMVV_CSRRS  = 3'b010,     // Used system CSR
-        FMT_OPIVI_CSRRC  = 3'b011,     //imm[4:0]
-        FMT_OPIVX        = 3'b100,     //GPR x, rs1
-        FMT_OPFVF_CSRRWI = 3'b101,     //--N/A
-        FMT_OPMVX_CSRRSI = 3'b110,     //GPR x, rs1
-        FMT_OPCFG_CSRRCI = 3'b111      //GPR x, rs1 & rs2/imm. 311p. Format under OP-V opcode? vsetvli, vsetvl
+        FMT_OPFVV_CSRRW  = 3'b001,
+        FMT_OPMVV_CSRRS  = 3'b010,
+        FMT_OPIVI_CSRRC  = 3'b011,
+        FMT_OPIVX        = 3'b100,
+        FMT_OPFVF_CSRRWI = 3'b101,
+        FMT_OPMVX_CSRRSI = 3'b110,
+        FMT_OPCFG_CSRRCI = 3'b111
     } vec_funct3_e;
 
     typedef enum logic [11:0] { 
         CSR_VSTART = 12'h8,
-        CSR_XSAT   = 12'h9,     // -- N/A
-        CSR_VXRM   = 12'hA,     // -- N/A 
-        CSR_VCSR   = 12'hF,     // -- N/A
+        CSR_XSAT   = 12'h9,
+        CSR_VXRM   = 12'hA,
+        CSR_VCSR   = 12'hF,
         CSR_VL     = 12'hC20,
         CSR_VTYPE  = 12'hC21,
         CSR_VLENB  = 12'hC22
@@ -122,60 +112,37 @@ package vpu_pkg;
 
     typedef struct packed {
         vec_instr_e    instr_enum;
-        // logic          valid;
-        // logic          illegal;
-        logic           writeback;
-
+        logic          writeback;
         major_opcode_e major_opcode;
-        vec_funct3_e   fmt;       // OP-V funct3 field; meaningful when opcode==OPCODE_OP_V
+        vec_funct3_e   fmt;
         logic [5:0]    funct6;
         op_e           operation;
-
-        // register fields 
-        logic [4:0]    vd;           // also rd for scalar dest (vsetvl*)
-        logic [4:0]    vs1;          // also rs1 for *VX/*VF and rs1 for vset*
-        logic [4:0]    vs2;          // also rs2 for vsetvl
-        logic [4:0]    vs3;          // store-data register (same bit position as vd)
-        logic [4:0]    imm5;         // OPIVI immediate (sign-extend at execute if needed)
+        logic [4:0]    vd;
+        logic [4:0]    vs1;
+        logic [4:0]    vs2;
+        logic [4:0]    vs3;
+        logic [4:0]    imm5;
         logic [XLEN-1:0] rs1_data;
         logic [XLEN-1:0] rs2_data;
-        // logic [10:0]   zimm11;    // vsetvli immediate
-        // logic [9:0]    zimm10;    // vsetivli immediate
-        // logic [4:0]    avl_uimm;  // vsetivli AVL (5-bit unsigned immediate)
-        logic          vm;        // vector mask-enable bit
-
-        // memory-only fields (meaningful when opcode is LOAD_FP/STORE_FP)
-        logic [2:0]    nf;        // number of fields (segments)
-        logic [2:0]    width;     // EEW encoding for loads/stores
+        logic          vm;
+        logic [2:0]    nf;
+        logic [2:0]    width;
         logic          mew;
-        logic [1:0]    mop;       
-        logic [4:0]    umop;      // lumop / sumop
-
-        // category flags
+        logic [1:0]    mop;
+        logic [4:0]    umop;
         logic          is_arith;
         logic          is_load;
         logic          is_store;
-        // logic          is_config;
-        // logic          is_mask_logic;
         logic          is_reduction;
         logic          is_widening;
         logic          is_narrowing;
-        // logic          is_signed;
-
-        // operand-presence flags 
         logic          uses_vs1;
         logic          uses_vs2;
-        logic          uses_vd_src;     // vd/vs3 also read (macc-style, store data)
+        logic          uses_vd_src;
         logic          uses_rs1_scalar;
         logic          uses_rs2_scalar;
         logic          uses_imm;
-
-        // CSRs information
-        // logic          vtype_vill;
-        // logic          vtype_vma;
-        // logic          vtype_vta;
-        // sew_e          vtype_vsew;
-        // lmul_e         vtype_vlmul;
+        lmul_e         emul;
         vtype_t        vtype;
         vl_t           vl;
         vl_t           vstart;
@@ -190,26 +157,23 @@ package vpu_pkg;
     localparam int unsigned FU_VSLD = 2;
     localparam int unsigned MAX_INFLIGHT  = 3;
  
-    // Dispatch stall reason (for debug / coverage) TODO: remove
     typedef enum logic [1:0] {
-        STALL_NONE     = 2'b00,  // no stall
-        STALL_HAZARD   = 2'b01,  // data hazard (RAW / WAW)
-        STALL_STRUCT   = 2'b10,  // structural: target FU slot occupied
-        STALL_BOTH     = 2'b11   // both (hazard takes priority in reporting)
+        STALL_NONE     = 2'b00,
+        STALL_HAZARD   = 2'b01,
+        STALL_STRUCT   = 2'b10,
+        STALL_BOTH     = 2'b11
     } stall_reason_e;
 
     // Derived constants
-    localparam int unsigned DW            = VPU_N_IPU * XLEN;             // [STATIC] datapath width (bits) 
-    localparam int unsigned FRAGS_PER_REG = VPU_VLEN / DW;                // fragments to cover per register
-    localparam int unsigned FRAG_MAX      = FRAGS_PER_REG * VPU_LMUL_MAX; // max fragments per instruction
-    localparam int unsigned FRAG_CNT_W    = $clog2(FRAG_MAX) + 1;         // counter width
-    localparam int unsigned FRAG_MSK_W    = FRAG_MAX;                     // mask width
-    localparam int unsigned REG_OFF_W     = $clog2(VPU_LMUL_MAX) + 1;     // reg offset width
-
+    localparam int unsigned DW            = VPU_N_IPU * XLEN;
+    localparam int unsigned FRAGS_PER_REG = VPU_VLEN / DW;
+    localparam int unsigned FRAG_MAX      = FRAGS_PER_REG * VPU_LMUL_MAX;
+    localparam int unsigned FRAG_CNT_W    = $clog2(FRAG_MAX) + 1;
+    localparam int unsigned FRAG_MSK_W    = FRAG_MAX;
+    localparam int unsigned REG_OFF_W     = $clog2(VPU_LMUL_MAX) + 1;
 
     typedef struct packed { 
-        // Fragmentation data for chaining
-        logic [FRAG_CNT_W-1:0]   frag_idx;  //[$clog2(FRAGS_PER_REG)-1:0] ?
+        logic [FRAG_CNT_W-1:0]   frag_idx;
         logic                    is_last;   
         vl_t                     elements;
         logic [4:0]              dispatch_vd;  
@@ -226,19 +190,16 @@ package vpu_pkg;
         vec_instr_e vec_instr; 
     } vpu_issue_t;
 
-    // Complementary VPU fields for 'wrapper_exe_instr_issue'
-    // Dispatched issue
     typedef struct packed {
-        x_issue_t            instr_issue;      // instruction issued
-        vpu_decoded_t        instr_decoded;    // Added issue decoded
-        dispatch_sideband_t  instr_fragment;   // Added
+        x_issue_t            instr_issue;
+        vpu_decoded_t        instr_decoded;
+        dispatch_sideband_t  instr_fragment;
     } vpu_compl_issue_t;
 
-    // Complementary VPU fields for 'exe_wrapper_result'
     typedef struct packed {
-        x_issue_fifo_res_t   xif_fifo_result;  // Response to result fifo
-        vpu_decoded_t        instr_decoded;    // Added issue decoded
-        dispatch_sideband_t  instr_fragment;   // Added
+        x_issue_fifo_res_t   xif_fifo_result;
+        vpu_decoded_t        instr_decoded;
+        dispatch_sideband_t  instr_fragment;
     } vpu_issue_fifo_res_t;
 
     ////////////////
