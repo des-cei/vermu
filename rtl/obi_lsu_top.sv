@@ -61,10 +61,10 @@ import vpu_pkg::*;
     logic [STRD_WIDTH-1:0] stride_d [PORTS];
     logic [STRD_WIDTH-1:0] stride_q [PORTS];
 
-    integer element_count;
-    integer frag_idx;
-    integer elements_per_port;
-    integer offset_elements;
+    integer element_count;      // Number of elements to process in vector fragment
+    integer frag_idx;           // Vector fragment index
+    integer elements_per_port;  // Max. number of elements that fit in that port.  
+    integer offset_elements;    // Which element each ports starts from
     integer remaining_elements;
     integer port_elements;
     integer stride_value;
@@ -84,23 +84,23 @@ import vpu_pkg::*;
     end
 
     assign transfer_done = dma_active_q && all_done;    // ? No es lo mismo que all done?
-    assign data_o = load_result_q;
+    assign data_o = transfer_done ? load_result_q : 0;
 
     // DMA request configuration . EEW
     always_comb begin
         integer config_i;
         unique case (instr_req.width)
-            3'b000: begin               // SEW_8
-                eew_d = 3'd3;
-                element_bytes_d = 1;
-                elements_per_port = DATA_BYTES;  // max_elem_per_port
-            end
-            3'b101: begin               // SEW_16
+            3'b000: begin                           // SEW_8
+                eew_d = 3'd3;   
+                element_bytes_d = 1;   
+                elements_per_port = DATA_BYTES;     // max_elem_per_port
+            end   
+            3'b101: begin                           // SEW_16
                 eew_d = 3'd4;
                 element_bytes_d = 2;
-                elements_per_port = DATA_BYTES / 2;  // max_elem_per_port
+                elements_per_port = DATA_BYTES / 2; // max_elem_per_port
             end
-            3'b110: begin               // SEW_32
+            3'b110: begin                           // SEW_32
                 eew_d = 3'd5;
                 element_bytes_d = 4;
                 elements_per_port = DATA_BYTES / 4; // max_elem_per_port
@@ -126,8 +126,8 @@ import vpu_pkg::*;
             // addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'(offset_elements * stride_value);   // TODO: DATA_WIDTH? 
             // addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'(offset_elements * stride_value) + ADDR_WIDTH'(frag_idx * stride_value);   // TODO: DATA_WIDTH?   . Under dev          
             addr_d[config_i] = instr_req.rs1_data +
-                               ADDR_WIDTH'((frag_idx * PORTS + config_i) * stride_value);
-                            //    ADDR_WIDTH'((frag_idx * elements_per_port + config_i) * stride_value);
+                                ADDR_WIDTH'((frag_idx * PORTS + config_i)*(elements_per_port * stride_value));
+                            //    ADDR_WIDTH'((frag_idx * PORTS + config_i) * stride_value);      // working only for sew32
             size_d[config_i] = SIZE_WIDTH'(port_elements * element_bytes_d);
             stride_d[config_i] = STRD_WIDTH'(stride_value);
             // $display("frag_idx=%d port=%d addr=%h offset_elements=%d remaining_elements=%d port_elements=%d",
@@ -270,7 +270,7 @@ import vpu_pkg::*;
 
     assign if_exe_wrapper.exe_wrapper_recv_instr_ready = lsu_ready;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_valid_exec_o = transfer_done;
-    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o = '0;
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o = load_result_q;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.req =
         if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.req;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.resp =
