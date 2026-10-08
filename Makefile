@@ -53,6 +53,8 @@ WAVE_DO ?= tb/wave.do
 MARCH := rv32imc_zve32x_zvl128b
 MABI := ilp32
 CFLAGS := -O2 -march=$(MARCH) -mabi=$(MABI) -I$(PROJECT_DIR) -Isw/include
+EXTRA_CORES_ROOTS ?=
+FUSESOC_ROOT_FLAGS = --cores-root $(MODULE_DIR) $(addprefix --cores-root ,$(EXTRA_CORES_ROOTS))
 
 
 .PHONY: all help check-tools build-sw build-sim run-vpu-unit run-vpu-unit-gui run-questa-tb run-questa-tb-gui
@@ -103,7 +105,7 @@ build-sw:
 	$(RISCV_OBJDUMP) -d $(OBJ) > $(ASM)
 
 build-sim: check-tools
-	$(FUSESOC) --cores-root . run --target=$(FUSESOC_TARGET) --setup --build $(CORE_NAME)
+	$(FUSESOC) $(FUSESOC_ROOT_FLAGS) run --target=$(FUSESOC_TARGET) --setup --build $(CORE_NAME)
 	@cat $(SIM_DIR)/transcript
 
 ## Test VPU by injection of certain C application instructions through X-IF

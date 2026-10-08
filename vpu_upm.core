@@ -5,6 +5,8 @@ description: "Vector Processing Unit Zve32x"
 
 filesets:
     files_rtl:
+        depend:
+            - pulp-platform.org::common_cells  
         files:
             - rtl/include/cvxif_types_pkg.sv
             - rtl/include/obi_pkg.sv
@@ -30,28 +32,33 @@ filesets:
         # include_dirs:
         #   - rtl/include
 
-    files_common_cells:
-        files:
-        - rtl/vendor/pulp_platform/common_cells/src/fifo_v3.sv
-        #- rtl/vendor/pulp_platform/common_cells/include/common_cells/assertions.svh: {is_include_file: true}
-        - rtl/vendor/pulp_platform/common_cells/include/common_cells/assertions.svh:
-            is_include_file: true
-            include_path: rtl/vendor/pulp_platform/common_cells/include
-        file_type: systemVerilogSource
-        # include_dirs:
-        #   - rtl/vendor/pulp_platform/common_cells/include
+    # files_common_cells:
+    #     depend:
+    #         - pulp-platform.org::common_cells  
+        # files:
+        # - rtl/vendor/pulp_platform/common_cells/src/fifo_v3.sv
+        # #- rtl/vendor/pulp_platform/common_cells/include/common_cells/assertions.svh: {is_include_file: true}
+        # - rtl/vendor/pulp_platform/common_cells/include/common_cells/assertions.svh:
+        #     is_include_file: true
+        #     include_path: rtl/vendor/pulp_platform/common_cells/include
+        # file_type: systemVerilogSource
+        # # include_dirs:
+        # #   - rtl/vendor/pulp_platform/common_cells/include
     
     files_tb:
         files:
         - tb/vpu_stimulus_gen.sv
         # - tb/vpu_pipeline_checker.sv
+        - tb/tb_vpu_pkg.sv
         - tb/cvxif_cpu_model.sv
+        - tb/obi_mem_model.sv
         - tb/tb_vpu_alu.sv
         - tb/tb_vpu_top.sv
         - tb/tb_vpu_dispatch.sv
         - tb/tb_vpu_csr.sv
         - tb/tb_vpu_xif_decoder.sv
         - tb/tb_vpu_obi_lsu_top.sv
+        - tb/tb_vpu_top_lsu_eew.sv
         file_type: systemVerilogSource
         # include_dirs:
         #   - tb
@@ -59,13 +66,14 @@ filesets:
 targets:
     default:
         filesets:
+        - files_common_cells
         - files_rtl
 
     vpu-sim:
         default_tool: modelsim
         filesets:
+        # - files_common_cells
         - files_rtl
-        - files_common_cells
         - files_tb
         toplevel: tb_vpu_top
         tools:

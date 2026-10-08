@@ -90,20 +90,20 @@ import vpu_pkg::*;
     always_comb begin
         integer config_i;
         unique case (instr_req.width)
-            3'b000: begin                           // SEW_8
+            3'b000: begin                           // EEW_8
                 eew_d = 3'd3;   
                 element_bytes_d = 1;   
-                elements_per_port = DATA_BYTES;     // max_elem_per_port
+                elements_per_port = DATA_BYTES;     
             end   
-            3'b101: begin                           // SEW_16
+            3'b101: begin                           // EEW_16
                 eew_d = 3'd4;
                 element_bytes_d = 2;
-                elements_per_port = DATA_BYTES / 2; // max_elem_per_port
+                elements_per_port = DATA_BYTES / 2; 
             end
-            3'b110: begin                           // SEW_32
+            3'b110: begin                           // EEW_32
                 eew_d = 3'd5;
                 element_bytes_d = 4;
-                elements_per_port = DATA_BYTES / 4; // max_elem_per_port
+                elements_per_port = DATA_BYTES / 4; 
             end
             default: begin
                 eew_d = 3'd0;
@@ -127,7 +127,7 @@ import vpu_pkg::*;
             // addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'(offset_elements * stride_value) + ADDR_WIDTH'(frag_idx * stride_value);   // TODO: DATA_WIDTH?   . Under dev          
             addr_d[config_i] = instr_req.rs1_data +
                                 ADDR_WIDTH'((frag_idx * PORTS + config_i)*(elements_per_port * stride_value));
-                            //    ADDR_WIDTH'((frag_idx * PORTS + config_i) * stride_value);      // working only for sew32
+                            //    ADDR_WIDTH'((frag_idx * PORTS + config_i) * stride_value);      // working only for eew32
             size_d[config_i] = SIZE_WIDTH'(port_elements * element_bytes_d);
             stride_d[config_i] = STRD_WIDTH'(stride_value);
             // $display("frag_idx=%d port=%d addr=%h offset_elements=%d remaining_elements=%d port_elements=%d",
