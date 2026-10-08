@@ -23,10 +23,10 @@ package vpu_pkg;
 
     // typedef logic [31:0] elen_t;    
     
-    // Number of bits in a vector register (in each of 32 registers). Min 32. [DYNAMIC]
+    // Number of bits in a vector register (in each of 32 registers). Min 32. [DESIGN]
     localparam int unsigned VPU_VLEN = @VPU_VLEN@;             
     
-    // Number of Integer Processing Units [DYNAMIC]
+    // Number of Integer Processing Units [DESIGN]
     localparam int unsigned VPU_N_IPU = @VPU_N_IPU@;             
 
     // Datapath width
@@ -64,6 +64,7 @@ package vpu_pkg;
     } sew_e;
 
     typedef enum logic [2:0] {
+        // TODO: LMUL_F8
         LMUL_F4 = 3'b110,
         LMUL_F2 = 3'b111,
         LMUL_1  = 3'b000,
@@ -74,6 +75,7 @@ package vpu_pkg;
 
     // Source formats
     typedef enum logic [6:0] {   
+        OPCODE_NONE   = 7'h0,
         OPCODE_LOAD   = 7'h7,             
         OPCODE_STORE  = 7'h27,            
         OPCODE_OP_V   = 7'h57,
@@ -133,6 +135,7 @@ package vpu_pkg;
         logic          is_arith;
         logic          is_load;
         logic          is_store;
+        logic          is_permutation;
         logic          is_reduction;
         logic          is_widening;
         logic          is_narrowing;
