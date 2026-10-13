@@ -144,6 +144,7 @@ import vpu_pkg::*;
     ) i_vpu_xif_decoder (
         .issue_valid_i  (x_issue_valid_i),
         .instr_i        (temp_x_issue_i.req.instr),
+        .vtype_i        (vtype_q),
         .x_issue_resp_o (resp_instr_predecoder),
         .vec_instr_o    (vec_instr) 
     );

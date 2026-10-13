@@ -120,30 +120,16 @@ import vpu_pkg::*;
         .if_wrapper_exe_vsld (xif_exe_vsld_i.xif_wrapper)
     );
 
-    // execution_units vlsu_i 
-    // (
-    //     .clk_i,
-    //     .rst_ni,
-    //     .if_exe_wrapper (xif_exe_vlsu_i.exe_unit)
-    // );
-
-    execution_units vsld_i 
-    (
-        .clk_i,
-        .rst_ni,
-        .if_exe_wrapper (xif_exe_vsld_i.exe_unit)
-    );
-
     dw_t vrf_wdata   [2:0];
     dw_t vrf_rdata1  [2:0];
     dw_t vrf_rdata2  [2:0];
     dw_t vrf_vd_data [2:0];
 
-    dw_t simd_result, vlsu_result;
+    dw_t simd_result, vlsu_result, vsld_result;
 
     assign vrf_wdata[FU_VALU] = simd_result;
     assign vrf_wdata[FU_VLSU] = vlsu_result;
-    // assign vrf_wdata[FU_VSLD] = vsld_result;
+    assign vrf_wdata[FU_VSLD] = vsld_result;
 
     vpu_vregfile vregfile_i(
         .clk_i           (clk_i),
@@ -160,8 +146,6 @@ import vpu_pkg::*;
     simd_controller simd_controller_i (
         .clk_i            (clk_i),
         .rst_ni           (rst_ni),
-        // .op_s1_i          (256'hAAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD33333333444444445555555566666666), //rdata1
-        // .op_s2_i          (256'h2222222233333333444444445555555566666666BBBBBBBBCCCCCCCCDDDDDDDD), //vrf_rdata2
         .op_s1_i          (vrf_rdata1[FU_VALU]),
         .op_s2_i          (vrf_rdata2[FU_VALU]),
         .op_d_i           (vrf_vd_data[FU_VALU]), 
@@ -184,323 +168,15 @@ import vpu_pkg::*;
         .masters_resp_i    (masters_resp_i),
         .masters_req_o     (masters_req_o) 
     );
-      
-/////// User ////////////
-/*
-  logic  instr_vrf_we, op_valid_ls, op_valid_simd, done_w, done_r2,
-            simd_result_valid, ls_valid, csr_valid, result_valid;
-  logic  vrf_we, lsu_vrf_we;
-  logic  illegal_req;
-  addr_t raddr1, raddr2, waddr; 
-  vlen_t vrf_wdata, rdata1, vrf_rdata1, vrf_rdata2, vrf_vd_data, wdata, simd_result, mask;
-  op_e   operation;
-  vpu_req_t vpu_req;
-  logic [XLEN-1:0] gpr_result;
-
-  // load-store
-  logic lsu_result_valid;
-  logic state_was_busy;
-
-  // CSRs
-  vtype_t csr_vtype;
-  vl_t    csr_vl, csr_vstart;
-  xlen_t  vlmax;
-
-  // FSM 
-  xif_fsm_e state;
-
-  // Move
-  addr_t nreg;
-  logic  vmv_done;
-  addr_t vmv_offset;
-  logic vrf_op_valid;
-  logic vmv_active;
-  logic waiting_for_done;
-  logic vrf_we_d;
-
-  interface vpu_debug_if;
-      op_e          operation;
-      logic [VLEN-1:0] rdata1;
-      logic [VLEN-1:0] vrf_rdata2;
-      logic [VLEN-1:0] vrf_vd_data;
-      logic [VLEN-1:0] result; 
-      logic simd_result_valid;
-  endinterface
-
-///////// Modules ///////////////
-
-  vpu_decoder #(
-      .copro_issue_resp_t(rvv_instr_pkg::copro_issue_resp_t),
-      .opcode_t          (rvv_instr_pkg::opcode_t),
-      .NbInstr           (rvv_instr_pkg::NbInstr),
-      .CoproInstr        (rvv_instr_pkg::CoproInstr),
-      .NrRgprPorts       (NrRgprPorts),
-      .hartid_t          (hartid_t),
-      .id_t              (id_t),
-      .x_issue_req_t     (x_issue_req_t),
-      .x_issue_resp_t    (x_issue_resp_t),
-      .x_register_t      (x_register_t),
-      .registers_t       (registers_t)
-  ) vpu_decoder_i (
-      .clk_i               (clk_i),
-      .rst_ni              (rst_ni),
-      .issue_valid_i       (issue_valid),
-      .issue_req_i         (issue_req),
-      .issue_ready_o       (issue_ready),
-      .issue_result_valid_i(result_valid),
-      .issue_resp_o        (issue_resp),
-      .register_valid_i    (register_valid),
-      .register_i          (register),
-      .registers_o         (registers),    
-      .op_valid_ls_i       (op_valid_ls),
-      .done_wi             (done_w),
-      .vmv_active_i        (vmv_active),
-      .vmv_offset_i        (vmv_offset),
-      .nreg_i              (nreg),
-      .waiting_for_done_i  (waiting_for_done),
-      .vrf_op_valid_o      (vrf_op_valid),
-      .vrf_we_d            (vrf_we_d),
-      .hartid_o            (issue_hartid),
-      .id_o                (issue_id),
-      .vpu_req_o           (vpu_req),      
-      .operation_o         (operation),
-      .state_o             (state),        
-      .vrf_we_o            (instr_vrf_we),
-      .op_valid_simd_o     (op_valid_simd),
-      .illegal_req_o       (illegal_req),
-      //CSRs
-      .vl_o                (csr_vl),
-      .vlmax_o             (vlmax),
-      .vtype_o             (csr_vtype),
-      .vstart_o            (csr_vstart),
-      .csr_we_o            (we),
-      .csr_result_valid_o  (csr_valid),
-      .result_o            (csr_result),
-      .state_was_busy_o    (state_was_busy)
-  );
-
-    obi_lsu_top #(
-      .opcode_t   (rvv_instr_pkg::opcode_t),
-      .obi_req_t  (obi_req_t),
-      .obi_resp_t (obi_resp_t)
-    ) obi_lsu_top_i (
-      .clk_i             (clk_i),   
-      .rst_ni            (rst_ni),
-      .vpu_req_i         (vpu_req),
-      .vl_i              (csr_vl),
-      .vlmax_i           (vlmax),
-      .state_was_busy_i  (state_was_busy),
-      .vrf_rdata_i       (vrf_rdata2),
-      .vrf_rdata_done_i  (done_r2),
-      .vrf_wdata_o       (vrf_wdata),
-      .lsu_vrf_we_o      (lsu_vrf_we),
-      .lsu_rdata_valid_o (),
-      .lsu_result_valid_o(lsu_result_valid),
-      .masters_resp_i    (masters_resp_i[0]),
-      .masters_req_o     (masters_req_o[0])
+    
+    vpu_sldu vsld_i 
+        (
+        .clk_i          (clk_i),
+        .rst_ni         (rst_ni),
+        .op_s1_i        (vrf_rdata1[FU_VSLD]),
+        .op_s2_i        (vrf_rdata2[FU_VSLD]),
+        .result_o       (vsld_result),
+        .if_exe_wrapper (xif_exe_vsld_i.exe_unit)
     );
 
-////////////////////
-// CVXIF RESPONSE //
-////////////////////
-
-  always_comb begin
-    x_result_valid_o  = result_valid; 
-    x_result_o.hartid = issue_hartid;
-    x_result_o.id     = issue_id;
-    x_result_o.we     = '0;
-
-    if (vpu_req.mopcode == op_v) begin
-      x_result_o.data = (vpu_req.funct3 == OPCFG_CSRRCI) ? csr_result : gpr_result; 
-    end else if (vpu_req.mopcode == system) begin
-      x_result_o.data = csr_result;      
-    end else begin
-      x_result_o.data = '0; 
-    end 
-
-    x_result_o.rd      = (we && vpu_req.mopcode == op_v) ? vpu_req.rd : '0;
-
-    if (vpu_req.is_writeback) begin
-      if(vpu_req.mopcode == op_v) begin
-        if (vpu_req.funct3 == OPCFG_CSRRCI) begin
-          x_result_o.we     = we;
-        end else begin
-          x_result_o.we     = done_w;
-        end 
-      end else if ( vpu_req.mopcode == system) begin  
-        x_result_o.we     = we;
-      end 
-    end else begin
-      x_result_o.we     = 1'b0; 
-    end
-    
-  end
-
-///////// User  /////////////
-
-  assign raddr1 = (vpu_req.mopcode == op_v) ? 
-                  ((vpu_req.funct3 == OPIVV || vpu_req.funct3 == OPMVV_CSRRS) ? vpu_req.vs1 : vpu_req.rs1) : '0;                                                         
-  assign vrf_we = (vpu_req.mopcode == load_fp) ? lsu_vrf_we : ((vpu_req.mopcode == op_v) ? ((op_valid_simd && simd_result_valid) || instr_vrf_we): 1'b0); 
-
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-        vmv_active <= 1'b0;
-        vmv_offset <= '0;
-        vmv_done   <= '0;
-        waiting_for_done <= 1'b0;
-    end else begin
-        vmv_done <= 1'b0;
-        if (issue_ready) begin
-          vmv_active    <= vpu_req.is_vmv_nr; 
-          vmv_offset    <= '0;
-          vmv_done      <= 1'b0;
-        end else begin
-          if (vmv_active && done_w) begin
-            if (vmv_offset == (nreg - 1)) begin
-                vmv_active <= 1'b0;      
-            end else begin
-                vmv_offset <= vmv_offset + 1'b1;
-            end
-          end
-          if (vrf_we_d) begin        
-              waiting_for_done <= 1'b1;
-              vmv_done <= 1'b0;
-          end else if (done_w && (vmv_offset == (nreg - 1))) begin     
-              waiting_for_done <= 1'b0;  
-              vmv_done <= 1'b1; 
-          end      
-        end
-    end
-  end
-
-  always_comb begin : addr2_assignation
-    nreg = '0;
-    if (vpu_req.mopcode == op_v) begin
-      if (vpu_req.is_vmv_nr) begin
-          nreg = get_nreg(vpu_req.opcode); 
-          raddr2 = vpu_req.vs2 + vmv_offset;  
-      end else begin
-          raddr2 = vpu_req.vs2;      
-      end             
-    end else if (vpu_req.mopcode == store_fp) begin
-        raddr2 = vpu_req.vd;
-    end else begin
-        raddr2 = '0;
-    end
-  end
-
-  always_comb begin: waddr_assignation
-    if ((vpu_req.mopcode == op_v) || (vpu_req.mopcode == load_fp)) begin
-      if (vpu_req.is_vmv_nr) begin
-        waddr = vpu_req.vd + vmv_offset;
-      end else begin
-        waddr = vpu_req.vd;
-      end
-    end else begin
-      waddr = '0;
-    end
-  end 
-
-  always_comb begin
-    if (vpu_req.mopcode == op_v) begin
-      unique case (operation)
-        VMV: begin
-          unique case (vpu_req.opcode)
-            VMV1R_V, 
-            VMV2R_V,
-            VMV4R_V,
-            VMV8R_V: begin
-              wdata = vrf_rdata2;                      
-            end
-            VMV_SX: wdata = {96'h0, vpu_req.rs1};
-            default: begin
-              if(!vpu_req.is_vmv_nr) begin
-                  if (vpu_req.vm) begin
-                    wdata = rdata1;                       
-                  end else begin
-                    for (int i = 0; i < VLEN; i++) begin  
-                      wdata[i] = mask[i] ? rdata1[i] : vrf_rdata2[i];
-                    end
-                  end
-              end else begin
-                wdata = '0;
-              end
-            end
-          endcase
-        end
-        default: begin
-          wdata = simd_result;
-        end
-      endcase
-    end else if (vpu_req.mopcode == load_fp) begin
-      wdata = vrf_wdata;
-    end else begin
-      wdata = '0;
-    end
-  end
-
- always_comb begin
-    unique case (vpu_req.funct3)
-      OPIVV,
-      OPMVV_CSRRS: begin
-        rdata1 = vrf_rdata1;
-      end
-      OPIVI_CSRRC,
-      OPIVX,
-      OPMVX_CSRRSI: begin
-        rdata1 = vpu_req.rs_rdata1;
-      end
-      default: rdata1 = '0; 
-    endcase
-    
-    unique case(vpu_req.mopcode) 
-      op_v: begin
-          if (vpu_req.funct3 == OPCFG_CSRRCI) begin 
-            result_valid = csr_valid;
-          end else begin
-            if (vpu_req.is_vmv_nr) begin
-              result_valid = vmv_done;
-            end else begin
-              result_valid = done_w; 
-            end
-          end
-      end
-      load_fp:  result_valid = ( done_w );
-      store_fp: begin
-            result_valid = lsu_result_valid; 
-      end
-      system: begin
-        result_valid = we;
-      end
-      default:  result_valid = 1'b0; 
-    endcase
-  end
-  
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      gpr_result <= '0;
-    end else begin
-      unique case (vpu_req.opcode)
-        VMV_XS:begin
-          unique case (csr_vtype.vsew)
-            SEW_8:   gpr_result <= xlen_t'(signed'(vrf_rdata2[7:0]));
-            SEW_16:  gpr_result <= xlen_t'(signed'(vrf_rdata2[15:0]));
-            default: gpr_result <= xlen_t'(signed'(vrf_rdata2[31:0]));
-          endcase
-        end 
-        default: ; 
-      endcase
-    end
-  end
-
-  //Verification tb_vpu_top.sv
-  vpu_debug_if debug_if();
-
-  assign debug_if.operation         = operation;
-  assign debug_if.rdata1            = rdata1;
-  assign debug_if.vrf_rdata2        = vrf_rdata2;
-  assign debug_if.result            = wdata;
-  assign debug_if.vrf_vd_data       = vrf_vd_data;
-  assign debug_if.simd_result_valid = simd_result_valid;
-  */
 endmodule

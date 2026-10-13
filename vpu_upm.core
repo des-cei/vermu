@@ -13,20 +13,18 @@ filesets:
             - rtl/include/rvv_instr_pkg.sv
             - build/generated/vpu_pkg.sv
             - rtl/if_xif_exe.sv
-            # - rtl/load_store_unit_mis.sv
             - rtl/vendor/obione/rtl/obione.sv
             - rtl/obi_lsu_top.sv
-            - rtl/vpu_simd_controller.sv
-            - rtl/vpu_simd_block.sv
             - rtl/vpu_vau.sv
-            - rtl/vpu_control_unit.sv
+            - rtl/vpu_simd_block.sv
+            - rtl/vpu_simd_controller.sv
             - rtl/vpu_decoder.sv
             - rtl/vpu_xif_decoder.sv
-            - rtl/vpu_top.sv
-            - rtl/vpu_vregfile.sv
-            - rtl/execution_units.sv
             - rtl/vpu_dispatch.sv
-            - rtl/shift_register.sv
+            - rtl/vpu_control_unit.sv
+            - rtl/vpu_vregfile.sv
+            - rtl/vpu_sldu.sv
+            - rtl/vpu_top.sv
             - rtl/include/utils_macros.svh: {is_include_file: true}
         file_type: systemVerilogSource
         # include_dirs:
@@ -47,11 +45,12 @@ filesets:
     
     files_tb:
         files:
-        - tb/vpu_stimulus_gen.sv
+        #- tb/vpu_stimulus_gen.sv
         # - tb/vpu_pipeline_checker.sv
         - tb/tb_vpu_pkg.sv
         - tb/cvxif_cpu_model.sv
         - tb/obi_mem_model.sv
+        - tb/tb_vpu_common.svh:    {is_include_file: true}
         - tb/tb_vpu_alu.sv
         - tb/tb_vpu_top.sv
         - tb/tb_vpu_dispatch.sv
@@ -59,6 +58,8 @@ filesets:
         - tb/tb_vpu_xif_decoder.sv
         - tb/tb_vpu_obi_lsu_top.sv
         - tb/tb_vpu_top_lsu_eew.sv
+        - tb/tb_vpu_top_vmv.sv
+        - tb/tb_vpu_top_vmv_scalar.sv
         file_type: systemVerilogSource
         # include_dirs:
         #   - tb
@@ -66,7 +67,7 @@ filesets:
 targets:
     default:
         filesets:
-        - files_common_cells
+        # - files_common_cells
         - files_rtl
 
     vpu-sim:

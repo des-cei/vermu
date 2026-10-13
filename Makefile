@@ -49,7 +49,7 @@ PROJECT_DIR := sw/$(PROJECT)
 #SRC := $(or $(wildcard $(PROJECT_DIR)/main.c), $(SW_DIR)/tb/$(PROJECT).c)
 SRC := $(or $(wildcard $(PROJECT_DIR)/main.c), sw/tb/$(PROJECT).c)
 OBJ := sw/build/main.o
-WAVE_DO ?= tb/wave.do
+WAVE_DO ?= $(if $(strip $(WAVE)),$(if $(findstring /,$(WAVE)),$(WAVE),tb/$(WAVE)),tb/wave.do)
 MARCH := rv32imc_zve32x_zvl128b
 MABI := ilp32
 CFLAGS := -O2 -march=$(MARCH) -mabi=$(MABI) -I$(PROJECT_DIR) -Isw/include
@@ -75,6 +75,8 @@ help:
 	@echo "  TB_TOP=<module>     	Testbench top module name"
 	@echo "  FUSESOC_TARGET=<name>  vpu-sim for vermu sim"
 	@echo "  TB_FILE=<file>      	Testbench source file under tb/"
+	@echo "  WAVE_DO=<file>      	Questa waveform script (default: tb/wave.do)"
+	@echo "  WAVE=<file>         	Alias for WAVE_DO"
 	@echo "  QUESTA_LICENSE=<lic>	Optional, only if you want to force a license file"
 	@echo "  VPU_N_IPU=<number> 	Number of integer processing units (default: 1)"
 	@echo "  VPU_VLEN=<bits>   		Vector register length in bits (default: 128)"
@@ -148,8 +150,6 @@ run-questa-tb: check-tools
 	cd $(SIM_DIR) && $(VSIM_ENV) vsim -c -do "run -all; quit" $(TB_TOP) +stimulus_path=$(CURDIR)/$(STIM)
 
 run-questa-tb-gui: check-tools
-	@echo "--> Compiling software..."
-	$(MAKE) build-sw PROJECT=$(PROJECT)
 	@echo "--> Building local simulation workspace..."
 	@echo "--> TB_TOP = $(TB_TOP)..."
 	$(MAKE) build-sim
@@ -157,8 +157,6 @@ run-questa-tb-gui: check-tools
 		echo "--> Compiling testbench source $(TB_FILE)..."; \
 		cd $(SIM_DIR) && $(VSIM_ENV) $(QUESTA_VLOG) -sv -work work $(CURDIR)/$(TB_FILE); \
 	fi
-	@echo "--> Generating stimulus..."
-	$(PYTHON) tb/gen_stimulus.py $(ASM) $(STIM)
 	@echo "--> Launching Questasim testbench $(TB_TOP) in GUI..."
 	cd $(SIM_DIR) && $(VSIM_ENV) vsim -voptargs="+acc" work.$(TB_TOP) +stimulus_path=$(CURDIR)/$(STIM) -do $(CURDIR)/$(WAVE_DO)
 	

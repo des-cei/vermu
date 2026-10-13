@@ -5,6 +5,7 @@
 
 module vpu_dispatch
     import cvxif_types_pkg::*;
+    import rvv_instr_pkg::*;
     import vpu_pkg::*;
  (
     input  logic clk_i,
@@ -30,6 +31,7 @@ module vpu_dispatch
         logic [4:0]                 vd_base;
         logic [4:0]                 vs1_base;
         logic [4:0]                 vs2_base;
+        logic [XLEN-1:0]            rs1_base;
         logic [3:0]                 lmul_val;       
         logic [FRAG_CNT_W-1:0]      total_frags;    
         logic                       uses_vs1;
@@ -88,8 +90,10 @@ module vpu_dispatch
 
     function automatic logic [FRAG_CNT_W-1:0] calc_total_frags(
         input logic [7:0] vl,
-        input sew_e vsew,     
-        input logic [3:0] lmul_val  
+        input sew_e       vsew,     
+        input logic [3:0] lmul_val,
+        input vec_instr_e vec_instr,
+        input logic       vta
     );
         int unsigned epf;       // elements per fragment
         int unsigned tf;
@@ -100,9 +104,11 @@ module vpu_dispatch
             SEW_16:  epf = DW / 16;  
             default: epf = DW / 32;  
         endcase
-        if (epf == '0) epf = 1;  // TODO: not real
+        if (epf == '0) epf = 1;                        // TODO: not real
         tf        = (vl + epf - 1) / epf;
-        if (vl != 0 && tf == 0) tf = 1;
+        if (vl != 0 && tf == 0) tf = 1;                // Instructions with single fragment
+        if (vec_instr == VMV_SX && vl == 0) tf = 1;
+        // else if (vec_instr == VMV_XS) tf = 1;       // Not considered LMUL > 1 
 
         // $display(
             // "vl=%0d vsew=%0d DW=%0d epf=%0d tf(before)=%0d N_IPU=%0d lmul_val=%0d limit=%0d",
@@ -119,6 +125,7 @@ module vpu_dispatch
         max_frags = FRAGS_PER_REG * lmul_val;
         if (max_frags == '0) max_frags = 1;
         if (tf > max_frags) tf = max_frags;
+        if (vta) tf = max_frags;                // If vta, whole register to be processed
 
         // $display(
         //     "tf=%0d limit=%0d clamp=%0b",
@@ -181,15 +188,24 @@ module vpu_dispatch
 
     logic [MAX_INFLIGHT-1:0][REG_OFF_W-1:0]             reg_offset;
     logic [MAX_INFLIGHT-1:0][$clog2(FRAGS_PER_REG)-1:0] frag_in_reg;
-
+    logic [MAX_INFLIGHT-1:0][XLEN-1:0]                  mem_offset;     // TODO: only for lsu?
+    
     always_comb begin
+
+        localparam int unsigned LOG2_N_IPU      = $clog2(VPU_N_IPU);
+        localparam int unsigned LOG2_VREG_BYTES = $clog2(VPU_VLEN / 8);  // 4 for VLEN=128
+            
         for (int i = 0; i < MAX_INFLIGHT; i++) begin
             // Which register in LMUL group
             reg_offset[i]  = REG_OFF_W'(slot_q[i].next_frag / FRAGS_PER_REG);
             // Which slice within register
             // frag_in_reg[i] = slot_q[i].next_frag[$clog2(FRAGS_PER_REG)-1:0];
             frag_in_reg[i] = slot_q[i].next_frag % FRAGS_PER_REG;
-        end
+            // Only for LS instructions
+            // mem_offset[i] = XLEN'((VPU_VLEN / XLEN) * ((slot_q[i].next_frag / VPU) % slot_q[i].lmul_val) * 4);
+
+            mem_offset[i] = XLEN'( (slot_q[i].next_frag >> LOG2_N_IPU) << LOG2_VREG_BYTES );       
+        end 
     end
 
     /////////////////////////////////
@@ -337,6 +353,7 @@ module vpu_dispatch
 
         for (int i = 0; i < MAX_INFLIGHT; i++) begin
             logic [4:0]          vs1_addr, vs2_addr, vd_addr;
+            logic [XLEN-1:0]     rs1_addr;
 
             slot_issue_en[i] = slot_q[i].valid
                              && (slot_q[i].next_frag < slot_q[i].total_frags)
@@ -348,6 +365,7 @@ module vpu_dispatch
                 vs1_addr = slot_q[i].vs1_base + 5'(reg_offset[i]);
                 vs2_addr = slot_q[i].vs2_base + 5'(reg_offset[i]);
                 vd_addr  = slot_q[i].vd_base  + 5'(reg_offset[i]);
+                rs1_addr = slot_q[i].rs1_base + mem_offset[i];
                 // Fragment index for data allocation in functional units
                 dispatch_last[i].is_last = (slot_q[i].next_frag == slot_q[i].total_frags - 1);
                 dispatch_last[i].frag_idx = frag_in_reg[i];
@@ -355,7 +373,7 @@ module vpu_dispatch
                     slot_q[i].decoded.vl,
                     slot_q[i].decoded.vtype.vsew,
                     slot_q[i].next_frag);
-
+                dispatch_last[i].next_frag = slot_q[i].next_frag;
                 // Start from stored metadata
                 issue = slot_q[i].issue_meta;
 
@@ -363,7 +381,8 @@ module vpu_dispatch
                 dispatch_last[i].dispatch_vs1 = vs1_addr;
                 dispatch_last[i].dispatch_vs2 = vs2_addr;
                 dispatch_last[i].dispatch_vd = vd_addr;
-
+                dispatch_last[i].dispatch_raddr1 = rs1_addr;
+                
                 fu_instr_issue[i].instr_issue    = issue;
                 fu_instr_issue[i].instr_decoded  = slot_q[i].decoded;
                 fu_instr_issue[i].instr_fragment = dispatch_last[i];
@@ -395,7 +414,7 @@ module vpu_dispatch
         // Route to target FU by instruction type
         if (disp_decoded_i.is_load || disp_decoded_i.is_store)
             new_fu_id = 2'(FU_VLSU);
-        else if (disp_decoded_i.is_widening || disp_decoded_i.is_narrowing)
+        else if (disp_decoded_i.is_permutation || disp_decoded_i.is_reduction || disp_decoded_i.is_widening || disp_decoded_i.is_narrowing)
             new_fu_id = 2'(FU_VSLD);
         else
             new_fu_id = 2'(FU_VALU);   // arith, reductions, mask ops
@@ -457,8 +476,8 @@ module vpu_dispatch
             if (wb_valid[i]) begin
                 slot_d[i].frag_done_mask[wb_frag[i]] = 1'b1;
                 // Free slot when last fragment acknowledged
-                // if (wb_is_last[i])
-                if (wb_frag[i] == slot_q[i].total_frags - 1)    // TODO: wb_is_last or wb_frag?
+                if (wb_is_last[i])
+                // if (wb_frag[i] == slot_q[i].total_frags - 1)    // TODO: wb_is_last or wb_frag?
                     slot_d[i].valid = 1'b0;
             end
                 // $display("%0t: wb_valid=%0b wb_frag=%0d mask(before)=%b mask(after)=%b, total_frags_q=%0d",
@@ -489,9 +508,10 @@ module vpu_dispatch
             slot_d[new_fu_id].vd_base        = (disp_decoded_i.major_opcode == OPCODE_STORE) ? disp_decoded_i.vs3 : disp_decoded_i.vd;
             slot_d[new_fu_id].vs1_base       = disp_decoded_i.vs1;
             slot_d[new_fu_id].vs2_base       = disp_decoded_i.vs2;
+            slot_d[new_fu_id].rs1_base       = disp_decoded_i.rs1_data;
             slot_d[new_fu_id].lmul_val       = lv;
             slot_d[new_fu_id].total_frags    = calc_total_frags(
-                                                   disp_decoded_i.vl, vsew, lv);
+                                                   disp_decoded_i.vl, vsew, lv, disp_decoded_i.instr_enum, disp_decoded_i.vtype.vta);
             slot_d[new_fu_id].uses_vs1       = disp_decoded_i.uses_vs1;
             slot_d[new_fu_id].uses_vs2       = disp_decoded_i.uses_vs2;
             slot_d[new_fu_id].uses_vd_src    = disp_decoded_i.uses_vd_src;
@@ -500,6 +520,7 @@ module vpu_dispatch
             slot_d[new_fu_id].hart_id        = disp_issue_i.instr_issue.req.hartid;
             slot_d[new_fu_id].x_id           = disp_issue_i.instr_issue.req.id;
             slot_d[new_fu_id].decoded        = disp_decoded_i;
+            // if (disp_decoded_i.instr_enum == VMV_XS || disp_decoded_i.instr_enum == VMV_SX) slot_d[new_fu_id].decoded.vl = 1;
             slot_d[new_fu_id].issue_meta     = disp_issue_i.instr_issue;
         end
 

@@ -91,6 +91,12 @@ module vpu_vregfile
         elements_per_fragment = (VPU_N_IPU * ELEN) / sew_bits;
         fragment_start = fragment * elements_per_fragment;
 
+// `ifndef SYNTHESIS
+//         $display("[%0t] active_elements_mask: sew_bits=%0d bytes_per_element=%0d elements_per_fragment=%0d fragment=%0d fragment_vl=%0d fragment_start=%0d vstart=%0d vl=%0d",
+//                  $time, sew_bits, bytes_per_element, elements_per_fragment,
+//                  fragment, fragment_vl, fragment_start, request.vstart, request.vl);
+// `endif
+
         for (int byte_index = 0; byte_index < (VPU_N_IPU * ELEN) / 8; byte_index++) begin
             element_index = byte_index / bytes_per_element;
             global_element = fragment_start + element_index;
@@ -101,6 +107,10 @@ module vpu_vregfile
             end
         end
 
+// `ifndef SYNTHESIS
+//         $display("[%0t] active_elements_mask: mask=%h", $time, mask);
+// `endif
+
         return mask;
     endfunction
 
@@ -110,7 +120,7 @@ module vpu_vregfile
         input dw_t            result_data,
         input dw_t            old_vd,
         input logic [FRAG_CNT_W-1:0] fragment,
-        input vl_t              fragment_vl
+        input vl_t            fragment_vl
     );
         dw_t merged_data;
         int sew_bits;
@@ -148,12 +158,11 @@ module vpu_vregfile
     // `endif
         
         for (int byte_index = 0; byte_index < FRAGB; byte_index++) begin
-            element_index = byte_index / bytes_per_element;
-            global_element = fragment_start + element_index;    // Global element idx
+            element_index = byte_index / bytes_per_element;     // Element idx in frag
+            global_element = fragment_start + element_index;    // Global element idx vector
             element_in_body = (element_index < fragment_vl) &&
                               (global_element >= request.vstart) &&
                               (global_element < request.vl);
-
             if (element_in_body) begin
                 // vm=1 disables masking. Otherwise v0 supplies one bit per element.
                 element_enabled = request.vm || vreg[0][fragment][element_index];
@@ -162,14 +171,33 @@ module vpu_vregfile
                 end else if (request.vtype.vma) begin   
                     merged_data[8 * byte_index +: 8] = 8'hFF;
                 end
-            end else if ((global_element >= request.vl) && request.vtype.vta) begin
+
+                // `ifndef SYNTHESIS
+                //     $display("[BODY] global_element=%0d, vl=%0d, vta=%0b, byte_index=%0d, merged_data_before=0x%08h",
+                //             global_element,
+                //             request.vl,
+                //             request.vtype.vta,
+                //             byte_index,
+                //             merged_data);
+                //     // $display("[TAIL] merged_data_after=0x%08h", merged_data);
+                // `endif 
+            end else if ((global_element >= fragment_vl) && request.vtype.vta) begin
                 merged_data[8 * byte_index +: 8] = 8'hFF;
+
+                // `ifndef SYNTHESIS
+                //     $display("[TAIL] global_element=%0d, vl=%0d, vta=%0b, byte_index=%0d, merged_data_before=0x%08h",
+                //             global_element,
+                //             request.vl,
+                //             request.vtype.vta,
+                //             byte_index,
+                //             merged_data);
+                // `endif 
             end
 
     // `ifndef SYNTHESIS
     //             if ((byte_index % bytes_per_element) == 0)
-    //                 $display("[%0t] merge_write_data: element=%0d global_element=%0d in_body=%b enabled=%b",
-    //                          $time, element_index, global_element, element_in_body,
+    //                 $display("[%0t] merge_write_data: merged_data=0x%08h, vl=%0d, vta=%0b, element_idx=%0d, global_element=%0d, in_body=%b, enabled=%b",
+    //                          $time, merged_data, request.vl,request.vtype.vta, element_index, global_element, element_in_body,
     //                          element_enabled);
     // `endif
             // Prestart and undisturbed elements retain old_vd.
@@ -194,6 +222,7 @@ module vpu_vregfile
             if (raddr2[fu] < NRVREG) begin
                 rdata2_o[fu] = vreg[raddr2[fu]][frag_idx[fu]] &
                                 active_elements_mask(decoded_req[fu], frag_idx[fu], frag_vl[fu]);
+                // $display("[%0t] vreg_data[2]: %h", $time, vreg[raddr2[2]][frag_idx[2]]);
             end
             if (vd[fu] < NRVREG) begin
                 // vd is intentionally unmasked for undisturbed writeback policy.
@@ -247,5 +276,3 @@ module vpu_vregfile
 `endif
 
 endmodule
-
-
