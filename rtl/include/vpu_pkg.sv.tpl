@@ -85,11 +85,11 @@ package vpu_pkg;
     //Operand type for OP-V instructions and operand-format 
     typedef enum logic [2:0] {
         FMT_OPIVV        = 3'b000, 
-        FMT_OPFVV_CSRRW  = 3'b001,
+        FMT_OPFVV_CSRRW  = 3'b001,  // N/A
         FMT_OPMVV_CSRRS  = 3'b010,
         FMT_OPIVI_CSRRC  = 3'b011,
         FMT_OPIVX        = 3'b100,
-        FMT_OPFVF_CSRRWI = 3'b101,
+        FMT_OPFVF_CSRRWI = 3'b101, // N/A
         FMT_OPMVX_CSRRSI = 3'b110,
         FMT_OPCFG_CSRRCI = 3'b111
     } vec_funct3_e;
@@ -181,7 +181,9 @@ package vpu_pkg;
         vl_t                     elements;
         logic [4:0]              dispatch_vd;  
         logic [4:0]              dispatch_vs1; 
-        logic [4:0]              dispatch_vs2; 
+        logic [4:0]              dispatch_vs2;
+        logic [XLEN-1:0]         dispatch_raddr1; 
+        logic [FRAG_CNT_W-1:0]   next_frag;
     } dispatch_sideband_t;
 
     ///////////////////
@@ -227,6 +229,79 @@ package vpu_pkg;
             SEW_16: return 16;
             SEW_32: return 32;
             default: return 32;
+        endcase
+    endfunction
+
+    function automatic int get_eew_bits(input logic [2:0] width);
+        unique case (width)
+            3'b000: return 8;
+            3'b101: return 16;
+            3'b110: return 32;
+            default: return 0;
+        endcase
+    endfunction
+    
+    // EMUL = (EEW / SEW) * LMUL
+    function automatic lmul_e get_emul(
+        input logic [2:0] eew,
+        input sew_e       sew,
+        input lmul_e      lmul,
+        output logic      illegal
+    );
+        int sew_bits, eew_bits;
+        int lmul_units;
+        int emul_units;
+
+        illegal  = 1'b0;
+        eew_bits = get_eew_bits(eew);
+        sew_bits = get_sew_bits(sew);
+
+        unique case (lmul)
+            LMUL_F4: lmul_units = 1;
+            LMUL_F2: lmul_units = 2;
+            LMUL_1:  lmul_units = 4;
+            LMUL_2:  lmul_units = 8;
+            LMUL_4:  lmul_units = 16;
+            LMUL_8:  lmul_units = 32;
+            default: begin
+                illegal = 1'b1;
+                return LMUL_1;
+            end
+        endcase
+
+        if ((eew_bits <= 0) || (sew_bits <= 0)) begin
+            illegal = 1'b1;
+            return LMUL_1;
+        end
+
+        // LMUL is represented in units of 1/4.
+        emul_units = (lmul_units * eew_bits);
+
+        // A non-integral result is below LMUL_F4 or otherwise unsupported.
+        if ((emul_units % sew_bits) != 0) begin
+            illegal = 1'b1;
+            return LMUL_F4;
+        end
+
+        emul_units = emul_units / sew_bits;
+
+        unique case (emul_units)
+            1:  return LMUL_F4;
+            2:  return LMUL_F2;
+            4:  return LMUL_1;
+            8:  return LMUL_2;
+            16: return LMUL_4;
+            32: return LMUL_8;
+            default: begin
+                // EMUL is smaller than 1/4 or greater than 8.
+                illegal = 1'b1;
+
+                // Return a legal value even though illegal is asserted.
+                if (emul_units > 32)
+                    return LMUL_8;
+                else
+                    return LMUL_F4;
+            end
         endcase
     endfunction
 

@@ -140,11 +140,14 @@ module vpu_dispatch
     function automatic vl_t calc_elements_for_frag(
         input vl_t             vl,
         input sew_e            vsew,
+        input vec_instr_e      instr,
         input logic [FRAG_CNT_W-1:0] frag
     );
+        // TODO: add vstart consideration
         vl_t epf;
         vl_t consumed;
-
+        
+        // Max elements per fragment 
         case (vsew)
             SEW_8:   epf = vl_t'(DW /  8);  
             SEW_16:  epf = vl_t'(DW / 16);  
@@ -153,7 +156,9 @@ module vpu_dispatch
         if (epf == '0) epf = 1;
 
         consumed = vl_t'(frag) * epf;
-        if (consumed >= vl)
+        if (instr == VMVNRR_V) 
+            return epf;
+        else if (consumed >= vl)
             return '0;
         else if (vl - consumed > epf)
             return epf;
@@ -162,14 +167,22 @@ module vpu_dispatch
     endfunction
 
     // Decode vlmul field to actual multiplier value 
-    function automatic logic [3:0] vlmul_to_val(input logic [2:0] vlmul);
-        case (vlmul)
-            3'b000:  return 4'd1;
-            3'b001:  return 4'd2;
-            3'b010:  return 4'd4;
-            3'b011:  return 4'd8;
-            default: return 4'd1;   // fractional: treat as 1
+    function automatic logic [3:0] vlmul_to_val(input logic [2:0] vlmul, input logic [2:0] nf, logic is_nf);
+        logic [3:0] val;
+
+        if (is_nf) begin
+            val = 4'(nf) + 4'd1;  // vmv<nr>r.v: simm5[2:0] = nr-1 -> 1/2
+        end else begin
+            case (vlmul)
+                3'b000:  val = 4'd1;
+                3'b001:  val = 4'd2;
+                3'b010:  val = 4'd4;
+                3'b011:  val = 4'd8;
+            default: val = 4'd1;   // fractional: treat as 1
         endcase
+        end
+
+        return val;
     endfunction
 
     function automatic logic id_is_older(
@@ -188,7 +201,7 @@ module vpu_dispatch
 
     logic [MAX_INFLIGHT-1:0][REG_OFF_W-1:0]             reg_offset;
     logic [MAX_INFLIGHT-1:0][$clog2(FRAGS_PER_REG)-1:0] frag_in_reg;
-    logic [MAX_INFLIGHT-1:0][XLEN-1:0]                  mem_offset;     // TODO: only for lsu?
+    logic [MAX_INFLIGHT-1:0][XLEN-1:0]                  mem_offset;     
     
     always_comb begin
 
@@ -199,11 +212,8 @@ module vpu_dispatch
             // Which register in LMUL group
             reg_offset[i]  = REG_OFF_W'(slot_q[i].next_frag / FRAGS_PER_REG);
             // Which slice within register
-            // frag_in_reg[i] = slot_q[i].next_frag[$clog2(FRAGS_PER_REG)-1:0];
             frag_in_reg[i] = slot_q[i].next_frag % FRAGS_PER_REG;
-            // Only for LS instructions
-            // mem_offset[i] = XLEN'((VPU_VLEN / XLEN) * ((slot_q[i].next_frag / VPU) % slot_q[i].lmul_val) * 4);
-
+            // LS instructions
             mem_offset[i] = XLEN'( (slot_q[i].next_frag >> LOG2_N_IPU) << LOG2_VREG_BYTES );       
         end 
     end
@@ -372,6 +382,7 @@ module vpu_dispatch
                 dispatch_last[i].elements = calc_elements_for_frag(
                     slot_q[i].decoded.vl,
                     slot_q[i].decoded.vtype.vsew,
+                    slot_q[i].decoded.instr_enum,
                     slot_q[i].next_frag);
                 dispatch_last[i].next_frag = slot_q[i].next_frag;
                 // Start from stored metadata
@@ -500,7 +511,7 @@ module vpu_dispatch
         if (dispatch_fire) begin
             logic [3:0] lv;
             sew_e vsew;
-            lv   = vlmul_to_val(disp_decoded_i.vtype.vlmul); // Considers CSRs?
+            lv   = vlmul_to_val(disp_decoded_i.vtype.vlmul, disp_issue_i.instr_issue.req.instr[17:15], (disp_decoded_i.instr_enum == VMVNRR_V)); // Considers CSRs?
             vsew = disp_decoded_i.vtype.vsew;
 
             slot_d[new_fu_id].valid          = 1'b1;

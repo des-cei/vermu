@@ -58,9 +58,11 @@ import vpu_pkg::*;
     x_result_t result_queue[$];
 
     typedef struct {
-        id_t id;
-        bit  accept;
-        bit  writeback;
+        time         timestamp;
+        id_t         id;
+        logic [31:0] instr;
+        bit          accept;
+        bit          writeback;
     } issue_rsp_t;
     issue_rsp_t issue_log[$];
 
@@ -114,14 +116,27 @@ import vpu_pkg::*;
 
             // Issue channel: the handshake completes with ready, whatever accept says
             if (issue_hs) begin
-                issue_log.push_back('{id: current_instr.id,
-                                      accept: x_issue_resp_i.accept,
-                                      writeback: x_issue_resp_i.writeback});
+
+                issue_log.push_back('{ timestamp: $time,
+                                       id:        current_instr.id,
+                                       instr:     current_instr.instr,
+                                       accept:    x_issue_resp_i.accept,
+                                       writeback: x_issue_resp_i.writeback});
+                
+                // $display("[%0t] ISSUE_PUSH id=%0h instr=%08h accept=%0b writeback=%0b",
+                //         $time,
+                //         current_instr.id,
+                //         current_instr.instr,
+                //         x_issue_resp_i.accept,
+                //         x_issue_resp_i.writeback);
+
                 if (VERBOSE)
                     $display("[%0t] CVXIF MODEL: Instruction %s, id=%0d", $time,
                              x_issue_resp_i.accept ? "accepted" : "REJECTED", current_instr.id);
                 current_instr_valid <= 1'b0;
-                if (issue_blocks_on_result) waiting_result_id <= current_instr.id;
+
+                if (issue_blocks_on_result) 
+                    waiting_result_id <= current_instr.id;
             end
 
             // Present the next queued instruction (overrides the clear above)
@@ -194,6 +209,15 @@ import vpu_pkg::*;
         forever begin
             for (int i = 0; i < issue_log.size(); i++) begin
                 if (issue_log[i].id == id) begin
+                    // $display("[%0t] ISSUE_POP id=%0h original_time=%0t instr=%08h accept=%0b writeback=%0b index=%0d size=%0d",
+                    //     $time,
+                    //     issue_log[i].id,
+                    //     issue_log[i].timestamp,
+                    //     issue_log[i].instr,
+                    //     issue_log[i].accept,
+                    //     issue_log[i].writeback,
+                    //     i,
+                    //     issue_log.size());
                     accept = issue_log[i].accept;
                     issue_log.delete(i);
                     return;
@@ -233,8 +257,10 @@ import vpu_pkg::*;
         input logic [31:0] rs2
     );
         x_result_t res;
+        bit        accept;
         queue_instruction(instr, hartid, id, rs1, rs2);
-        wait_for_result(id, res);
+        wait_issue_resp(id, accept);
+        if (accept) wait_for_result(id, res);
     endtask
 
 endmodule

@@ -6,16 +6,6 @@
 // (licensed under the Apache License 2.0).
 // Modifications by Ane Corral (ane.corral@upm.es).
 
-/*
-    THINGS TO BEAR IN MIND
-    Pendanto to handle instruction illegality. In cases in which instruction encoding is reserved,
-    instruction should not be accepted. Conditions:
-    -> OP-V
-    -> Load-Store:
-      - EMUL = (EEW/SEW)*LMUL. EMUL>8 or EMUL<1/8 is out-of-range
-    -> CSRs
-
-*/
 
 module vpu_control_unit
 import cvxif_types_pkg::*;

@@ -169,11 +169,14 @@
         id_t         id    = alloc_id();
         x_result_t   res;
         logic [31:0] instr;
+        bit          accepted;
 
         if (avl <= 31) instr = vtb_vsetivli(X_RD_VL, 5'(avl), vtype);
         else           instr = vtb_vsetvli (X_RD_VL, X_AVL,   vtype);
 
         xif_model.queue_instruction(instr, HARTID, id, avl, 0);
+        xif_model.wait_issue_resp(id, accepted);
+        if (!accepted) fail($sformatf("vsetvli with ID=%h REJECTED", id));
         xif_model.wait_for_result(id, res);
 
         check(32'(res.data) == 32'(exp_vl),
@@ -193,7 +196,7 @@
         xif_model.wait_issue_resp(id, accepted);
 
         if (accepted !== expect_accept)
-            fail($sformatf("%s: instruction %s but %s was expected", tag,
+            fail($sformatf("%s: instruction with ID=%h  %s but %s was expected", tag, id,
                            accepted ? "ACCEPTED" : "REJECTED",
                            expect_accept ? "accept" : "reject"));
 

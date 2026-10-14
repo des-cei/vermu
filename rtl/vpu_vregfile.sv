@@ -5,6 +5,7 @@
 
 module vpu_vregfile
     import vpu_pkg::*;
+    import rvv_instr_pkg::*;
 (
     input logic clk_i,
     input logic rst_ni,
@@ -104,6 +105,9 @@ module vpu_vregfile
                 (global_element >= request.vstart) &&
                 (global_element < request.vl)) begin
                 mask[8 * byte_index +: 8] = '1;
+            end else if ((request.instr_enum == VMVNRR_V) && (global_element >= request.vstart)) begin
+                // vmv<nr>r.v: whole register move, ignores vl/LMUL (valid even with vl = 0)
+                mask[8 * byte_index +: 8] = '1;
             end
         end
 
@@ -163,6 +167,9 @@ module vpu_vregfile
             element_in_body = (element_index < fragment_vl) &&
                               (global_element >= request.vstart) &&
                               (global_element < request.vl);
+            // vmv<nr>r.v: whole register move, ignores vl/LMUL (valid even with vl = 0), no tail
+            if (request.instr_enum == VMVNRR_V)
+                element_in_body = (global_element >= request.vstart);
             if (element_in_body) begin
                 // vm=1 disables masking. Otherwise v0 supplies one bit per element.
                 element_enabled = request.vm || vreg[0][fragment][element_index];
@@ -181,7 +188,8 @@ module vpu_vregfile
                 //             merged_data);
                 //     // $display("[TAIL] merged_data_after=0x%08h", merged_data);
                 // `endif 
-            end else if ((global_element >= fragment_vl) && request.vtype.vta) begin
+            end else if ((global_element >= fragment_vl) && request.vtype.vta &&
+                         (request.instr_enum != VMVNRR_V)) begin
                 merged_data[8 * byte_index +: 8] = 8'hFF;
 
                 // `ifndef SYNTHESIS

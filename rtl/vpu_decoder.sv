@@ -63,7 +63,12 @@ import rvv_instr_pkg::*;
             decoded_req_o.vtype.vta     = vtype_i.vta;
             decoded_req_o.vtype.vsew    = vtype_i.vsew;
             decoded_req_o.vtype.vlmul   = vtype_i.vlmul;
-            decoded_req_o.vl            = vl_i;
+            // unique case (instr_req_i.vec_instr)
+                // VMV_XS:  decoded_req_o.vl = vl_t'(1);
+                // VMV_SX:  decoded_req_o.vl = (vl_i != '0) ? vl_t'(1) : '0;
+                // default: decoded_req_o.vl = vl_i; 
+            // endcase
+            decoded_req_o.vl            = vl_i; 
             decoded_req_o.vstart        = vstart_i;
 
             unique case (instr_req_i.vec_instr)
@@ -220,18 +225,20 @@ import rvv_instr_pkg::*;
                     decoded_req_o.operation = OP_VMERGE;
                 end
                 VMV_VV, VMV_VX, VMV_VI: begin  
-                    decoded_req_o.is_arith  = 1'b1;
-                    decoded_req_o.operation = OP_VMV;
+                    decoded_req_o.is_permutation = 1'b1;
+                    decoded_req_o.operation      = OP_VMV;
                 end
                 VMV_XS: begin
+                    decoded_req_o.is_permutation = 1'b1;
                     decoded_req_o.operation = OP_VMV;
                 end
                 VMV_SX: begin
+                    decoded_req_o.is_permutation = 1'b1;
                     decoded_req_o.operation = OP_VMV;
                 end
                 VMVNRR_V: begin  
-                    decoded_req_o.is_arith  = 1'b1;
-                    decoded_req_o.operation = OP_VMV;
+                    decoded_req_o.is_permutation = 1'b1;
+                    decoded_req_o.operation      = OP_VMV;
                 end
 
                 // Saturating / averaging / scaling-shift / narrowing-clip
@@ -711,9 +718,10 @@ import rvv_instr_pkg::*;
             if (decoded_req_o.major_opcode == OPCODE_OP_V) begin     // is_arith
                 unique case (decoded_req_o.fmt)
                 FMT_OPIVV, FMT_OPMVV_CSRRS: begin
-                    decoded_req_o.funct6        = instr_req_i.instr_issue.req.instr[31:26];                   
-                    decoded_req_o.vs2           = instr_req_i.instr_issue.req.instr[24:20];          
+                    decoded_req_o.funct6        = instr_req_i.instr_issue.req.instr[31:26];
                     decoded_req_o.vs1           = instr_req_i.instr_issue.req.instr[19:15];                   
+                    // decoded_req_o.vs2           = (instr_req_i.vec_instr != VMV_VV) ? instr_req_i.instr_issue.req.instr[24:20] : '0;
+                    decoded_req_o.vs2           = instr_req_i.instr_issue.req.instr[24:20];
                     decoded_req_o.vd            = instr_req_i.instr_issue.req.instr[11:7];
                     decoded_req_o.uses_vs1 = 1'b1;
                     decoded_req_o.uses_vs2 = 1'b1;
@@ -789,6 +797,8 @@ import rvv_instr_pkg::*;
         end
 
         decoded_req_o.writeback = instr_req_i.instr_issue.resp.writeback;
+        
+        // Alignment check
 
     end : decoder
 

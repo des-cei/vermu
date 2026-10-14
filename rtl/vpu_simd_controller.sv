@@ -23,7 +23,6 @@ module simd_controller
     sew_e sew;
 
     assign operation = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.operation;
-    // assign vl = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.element; 
     assign iter_vl = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
     assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vtype.vsew;
 
@@ -57,7 +56,6 @@ module simd_controller
 
     red_acc_t red_acc;
 
-    // localparam int NUM_LANES = VPU_VLEN / 32;
     localparam int NUM_LANES = VPU_N_IPU;
 
     logic [NUM_LANES-1:0][31:0] lane_op_s1;

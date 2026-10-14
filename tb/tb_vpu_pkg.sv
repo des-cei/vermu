@@ -36,6 +36,7 @@ package tb_vpu_pkg;
     localparam logic [5:0] F6_VMERGE = 6'b010111;   // vmerge (vm=0) / vmv.v.* (vm=1, vs2=0)
     localparam logic [5:0] F6_VWXUNARY0 = 6'b010000;   // vmv.x.s (OPMVV, vs1=0)
     localparam logic [5:0] F6_VRXUNARY0 = 6'b010000;   // vmv.s.x (OPMVX, vs2=0)
+    localparam logic [5:0] F6_VSMUL  = 6'b100111;   // vsmul (OPIVV/OPIVX) / vmv<nr>r.v (OPIVI, vm=1)
     localparam logic [5:0] F6_VSLL   = 6'b100101;
     localparam logic [5:0] F6_VSRL   = 6'b101000;
     localparam logic [5:0] F6_VSRA   = 6'b101001;
@@ -274,6 +275,14 @@ package tb_vpu_pkg;
         return vtb_opv(F6_VMERGE, 1'b1, 5'd0, simm5, FMT_OPIVI_CSRRC, vd);
     endfunction
  
+    // vmv<nr>r.v vd, vs2  (OPIVI, funct6=100111, simm5 = nr-1, vm=1)
+    // 'nr' is passed as is (1/2/4/8 are legal; any other value makes a reserved
+    // encoding, useful for negative tests). 'vm' = 0 is also reserved.
+    function automatic logic [31:0] vtb_vmv_nr_r(input int nr, input logic [4:0] vd,
+                                                 input logic [4:0] vs2, input logic vm = 1'b1);
+        return vtb_opv(F6_VSMUL, vm, vs2, 5'(nr - 1), FMT_OPIVI_CSRRC, vd);
+    endfunction
+
     // Encoder driven by the instruction enum (rvv_instr_pkg::vec_instr_e), for the
     // OPI* integer subset. 'op1' is vs1, rs1 or simm5 according to the _VV/_VX/_VI suffix.
     // vmv.* ignore vs2/vm (forced to 0/1); vmerge.* ignore vm (forced to 0).

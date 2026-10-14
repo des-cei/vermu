@@ -28,7 +28,7 @@
 
 // Optional white-box check of the register file. Define it to a hierarchical
 // path returning byte <byte_idx> of vector register <vreg>, e.g.
-//   `define VPU_VRF_BYTE(vreg, byte_idx) dut.u_vrf.regs_q[vreg][8*(byte_idx) +: 8]
+`define VPU_VRF_BYTE
 // Without it, only the load->store round trip is checked (a bug that is
 // symmetric in load and store would then go unnoticed).
 // `define VPU_VRF_BYTE(vreg, byte_idx) ...
@@ -66,7 +66,14 @@ module tb_vpu_top_lsu_eew;
     localparam logic [7:0]  SENTINEL  = 8'hAA;
 
     `include "tb_vpu_common.svh"
-
+    `ifdef VPU_VRF_BYTE
+        localparam int VRF_FRAG_W = VPU_N_IPU * ELEN;  
+        function automatic logic [7:0] vrf_byte(input int vreg_i, input int byte_i);
+            logic [VRF_FRAG_W-1:0] frag;
+            frag = dut.vregfile_i.vreg[vreg_i][(byte_i * 8) / VRF_FRAG_W];
+            return frag[((byte_i * 8) % VRF_FRAG_W) +: 8];
+        endfunction
+    `endif
     //----------------------------------------------------------------------
     // One test point
     //----------------------------------------------------------------------
@@ -111,23 +118,23 @@ module tb_vpu_top_lsu_eew;
                     {"vle: ", tag}, accepted);
 
         if (legal && accepted) begin
+            `ifdef VPU_VRF_BYTE
+                    // byte b of the group is in register vd + b/VLENB, at byte b % VLENB
+                    for (int b = 0; b < nbytes; b++) begin
+                        logic [7:0] got = vrf_byte(c.vd + b / (VLEN / 8), b % (VLEN / 8));
+                        logic [7:0] exp = mem.read8(SRC_BASE + b);
+                        if (got !== exp)
+                            fail($sformatf("VRF byte %0d (v%0d): got %02h exp %02h",
+                                        b, c.vd + b / (VLEN / 8), got, exp));
+                    end
+            `endif
             check(mem.count_writes() == 0, {"vle performed bus writes: ", tag});
             check(mem.reads_within(SRC_BASE, SRC_BASE + nbytes),
                   {"vle read outside the source window: ", tag});
             check(mem.uninit_reads == 0, {"vle read bytes beyond the source window: ", tag});
+
             if (VERBOSE_PASS)
                 $display("    load : %0d bytes in %0d bus reads", nbytes, mem.count_reads());
-
-`ifdef VPU_VRF_BYTE
-            // Register-file view: byte b of the group lives in vd + b/VLENB, offset b%VLENB
-            for (int b = 0; b < nbytes; b++) begin
-                logic [7:0] got = `VPU_VRF_BYTE(c.vd + b / (VLEN / 8), b % (VLEN / 8));
-                logic [7:0] exp = mem.read8(SRC_BASE + b);
-                if (got !== exp)
-                    fail($sformatf("VRF byte %0d (v%0d): got %02h exp %02h",
-                                   b, c.vd + b / (VLEN / 8), got, exp));
-            end
-`endif
         end else if (!legal && !accepted) begin
             check(mem.access_log.size() == 0, {"rejected vle still touched the bus: ", tag});
         end

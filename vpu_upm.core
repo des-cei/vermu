@@ -60,6 +60,7 @@ filesets:
         - tb/tb_vpu_top_lsu_eew.sv
         - tb/tb_vpu_top_vmv.sv
         - tb/tb_vpu_top_vmv_scalar.sv
+        - tb/tb_vpu_top_vmvnr.sv
         file_type: systemVerilogSource
         # include_dirs:
         #   - tb
