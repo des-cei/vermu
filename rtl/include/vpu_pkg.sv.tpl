@@ -145,6 +145,7 @@ package vpu_pkg;
         logic          uses_rs1_scalar;
         logic          uses_rs2_scalar;
         logic          uses_imm;
+        sew_e          eew;
         lmul_e         emul;
         vtype_t        vtype;
         vl_t           vl;
@@ -174,16 +175,23 @@ package vpu_pkg;
     localparam int unsigned FRAG_CNT_W    = $clog2(FRAG_MAX) + 1;
     localparam int unsigned FRAG_MSK_W    = FRAG_MAX;
     localparam int unsigned REG_OFF_W     = $clog2(VPU_LMUL_MAX) + 1;
+    localparam int unsigned ROW_W         = (FRAGS_PER_REG > 1) ? $clog2(FRAGS_PER_REG) : 1;
 
     typedef struct packed { 
-        logic [FRAG_CNT_W-1:0]   frag_idx;
+        logic [FRAG_CNT_W-1:0]   next_frag;         // global set counter
         logic                    is_last;   
-        vl_t                     elements;
+        // logic [FRAG_CNT_W-1:0]   frag_idx;
+        vl_t                     elem_base;         // global index of first element processed this step
+        vl_t                     elements;          // elements processed this step
         logic [4:0]              dispatch_vd;  
         logic [4:0]              dispatch_vs1; 
         logic [4:0]              dispatch_vs2;
+        logic [ROW_W-1:0]        row_vd;            // fragment row inside each register
+        logic [ROW_W-1:0]        row_vs1;
+        logic [ROW_W-1:0]        row_vs2;
         logic [XLEN-1:0]         dispatch_raddr1; 
-        logic [FRAG_CNT_W-1:0]   next_frag;
+        logic [FRAG_CNT_W-1:0]   vd_frag;           // global fragment index inside the vd group
+        logic                    vd_frag_done;      // this write completes vd_frag (consumers may read it)
     } dispatch_sideband_t;
 
     ///////////////////
@@ -223,7 +231,7 @@ package vpu_pkg;
         logic[31:0] e32;  
     } red_acc_t;
 
-    function automatic int get_sew_bits(input sew_e SEW);
+    function automatic int get_eew_bits(input sew_e SEW);
         case (SEW)
             SEW_8:  return 8;
             SEW_16: return 16;
@@ -232,7 +240,7 @@ package vpu_pkg;
         endcase
     endfunction
 
-    function automatic int get_eew_bits(input logic [2:0] width);
+    function automatic int get_width_bits(input logic [2:0] width);
         unique case (width)
             3'b000: return 8;
             3'b101: return 16;
@@ -240,21 +248,45 @@ package vpu_pkg;
             default: return 0;
         endcase
     endfunction
+
+    // Element width of the vd element space: EEW for loads/stores, SEW otherwise
+    function automatic sew_e elem_eew(input vpu_decoded_t d);
+        if (d.is_load || d.is_store) begin
+            unique case (d.width)
+                3'b000:  return SEW_8;
+                3'b101:  return SEW_16;
+                3'b110:  return SEW_32; 
+                default: return SEW_32;
+            endcase
+        end
+        // TODO: widen/narrow
+        return d.vtype.vsew;
+    endfunction
+
+    function automatic vl_t calc_epf(input sew_e vsew);
+        vl_t epf;
+        case (vsew)
+            SEW_8:   epf = vl_t'(DW /  8);  
+            SEW_16:  epf = vl_t'(DW / 16);  
+            default: epf = vl_t'(DW / 32);
+        endcase
+        return epf;
+    endfunction
     
     // EMUL = (EEW / SEW) * LMUL
     function automatic lmul_e get_emul(
-        input logic [2:0] eew,
+        input logic [2:0] width,
         input sew_e       sew,
         input lmul_e      lmul,
         output logic      illegal
     );
-        int sew_bits, eew_bits;
+        int sew_bits, width_bits;
         int lmul_units;
         int emul_units;
 
         illegal  = 1'b0;
-        eew_bits = get_eew_bits(eew);
-        sew_bits = get_sew_bits(sew);
+        width_bits = get_width_bits(width);
+        sew_bits = get_eew_bits(sew);
 
         unique case (lmul)
             LMUL_F4: lmul_units = 1;
@@ -269,13 +301,13 @@ package vpu_pkg;
             end
         endcase
 
-        if ((eew_bits <= 0) || (sew_bits <= 0)) begin
+        if ((width_bits <= 0) || (sew_bits <= 0)) begin
             illegal = 1'b1;
             return LMUL_1;
         end
 
         // LMUL is represented in units of 1/4.
-        emul_units = (lmul_units * eew_bits);
+        emul_units = (lmul_units * width_bits);
 
         // A non-integral result is below LMUL_F4 or otherwise unsupported.
         if ((emul_units % sew_bits) != 0) begin

@@ -105,7 +105,7 @@ module tb_vpu_top_vmv_scalar;
     task automatic run_xs(input int sew, input int lmul_log2, input int r,
                           input logic [31:0] val, input int avl);
         int          vlmax     = vtb_vlmax(VLEN, sew, lmul_log2);
-        int          exp_vl    = (avl < vlmax) ? avl : vlmax;
+        int          exp_vl    = vtb_expected_vl(avl, vlmax);
         int          per_reg   = VLEN / sew;               // elements per vector register
         int          grp_bytes = vlmax * sew / 8;
         int          idx       = r * per_reg;              // element index of vs2[0] in the group
@@ -143,7 +143,7 @@ module tb_vpu_top_vmv_scalar;
     task automatic run_sx(input int sew, input int lmul_log2, input int r,
                           input logic [31:0] val, input int avl);
         int          vlmax     = vtb_vlmax(VLEN, sew, lmul_log2);
-        int          exp_vl    = (avl < vlmax) ? avl : vlmax;
+        int          exp_vl    = vtb_expected_vl(avl, vlmax);
         int          per_reg   = VLEN / sew;
         int          grp_bytes = vlmax * sew / 8;
         int          idx       = r * per_reg;               // target element in the group
@@ -193,20 +193,24 @@ module tb_vpu_top_vmv_scalar;
 
             if (i == idx) begin
                 logic [31:0] exp = (exp_vl >= 1) ? new_elem : old;
-                if (got !== exp)
+                if (got !== exp) begin
                     fail($sformatf("%s: target element %0d = %s, expected %s",
                                    tag, i, data_str(got), data_str(exp)));
+                end
             end else if (exp_vl == 0) begin
                 // vl = 0 : nothing may change, tail included
-                if (got !== old)
+                if (got !== old) begin
                     fail($sformatf("%s: element %0d changed with vl=0: %s, expected %s",
                                    tag, i, data_str(got), data_str(old)));
+                end
             end else if (CHECK_TAIL) begin
                 bit may_be_ones = VTA && (in_vd_reg || !STRICT_OTHER_REGS);
-                if (!(got === old || (may_be_ones && got === all_ones)))
+                if (!(got === old || (may_be_ones && got === all_ones))) begin
                     fail($sformatf("%s: tail element %0d = %s, expected %s%s",
                                    tag, i, data_str(got), data_str(old),
                                    may_be_ones ? " or all ones" : ""));
+                    $stop;
+                end
             end
         end
 
@@ -218,9 +222,8 @@ module tb_vpu_top_vmv_scalar;
     //----------------------------------------------------------------------
     int          sews [3] = '{8, 16, 32};
     // values: sign boundaries for SEW = 8 / 16 / 32, and a "random-looking" one
-    // logic [31:0] vals [8] = '{32'hDEAD_BEEF, 32'h0000_007F, 32'h0000_0080, 32'h0000_8000,
-    //                           32'h7FFF_FFFF, 32'h8000_0000, 32'hFFFF_FFFF, 32'h1234_5678};
-    logic [31:0] vals [1] = '{32'hDEAD_BEEF};
+    logic [31:0] vals [8] = '{32'hDEAD_BEEF, 32'h0000_007F, 32'h0000_0080, 32'h0000_8000,
+                              32'h7FFF_FFFF, 32'h8000_0000, 32'hFFFF_FFFF, 32'h1234_5678};
     initial begin
         int vlmax, regs, per_reg;
         int rs [2];

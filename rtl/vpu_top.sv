@@ -169,12 +169,12 @@ import vpu_pkg::*;
         .masters_req_o     (masters_req_o) 
     );
     
-    vpu_sldu vsld_i 
-        (
+    vpu_sldu vsld_i (
         .clk_i          (clk_i),
         .rst_ni         (rst_ni),
         .op_s1_i        (vrf_rdata1[FU_VSLD]),
         .op_s2_i        (vrf_rdata2[FU_VSLD]),
+        .op_d_i         (vrf_vd_data[FU_VSLD]),
         .result_o       (vsld_result),
         .if_exe_wrapper (xif_exe_vsld_i.exe_unit)
     );

@@ -75,6 +75,17 @@ import vpu_pkg::*;
     x_issue_fifo_res_t      csr_fifo_res_d, csr_fifo_res_q;
     logic                   csr_lecture_valid;
     logic [X_RFW_WIDTH-1:0] csr_lecture;
+    // WORKAROUND - duplicate vset{i}vl{i} filter (prev_cfg_id / prev_cfg_id_valid)
+    // Symptom: vtype/vl were overwritten with trash data because the same config
+    // instruction was seen twice at the instr FIFO pop (root cause not found yet).
+    // Current behaviour: a config pop is ignored if its id equals the last config id;
+    // the filter is released when any other instruction is popped.
+    // Known limitation: CV-X-IF ids are only unique among in-flight instructions, so
+    // two back-to-back configs with a reused id (nothing in between) are wrongly skipped.
+    // TODO: find the root cause and remove this filter. Candidates to check in waves:
+    //   - x_commit_valid_i held >1 cycle (tb commits together with issue) -> double push.
+    //   - fifo_instr_pop can fire via disp_ready while issue_instr_op == INSTR_NONE
+    //     (disp_empty/fifo_res_empty low): head instr popped without CSR logic seeing it.
     logic                   prev_cfg_id_valid;
     id_t                    prev_cfg_id;
 
@@ -341,7 +352,7 @@ import vpu_pkg::*;
         vl_d            = vl_q;
         vlmax_d         = vlmax_q;
 
-        // if (fifo_instr_pop  && (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL )) begin
+        // Duplicate filter: see WORKAROUND note at prev_cfg_id declaration.
         if (fifo_instr_pop &&
             (issue_instr_op == VSETVLI || issue_instr_op == VSETIVLI || issue_instr_op == VSETVL)
             && (!prev_cfg_id_valid || prev_cfg_id != issue_instr_o.instr_issue.req.id)) begin
@@ -356,7 +367,6 @@ import vpu_pkg::*;
                     vtype_supported = 1'b0;
                 end
             endcase
-
             unique case (decoder_req.vtype.vlmul) 
                 LMUL_F4:  int_lmul4_d = 1;    
                 LMUL_F2:  int_lmul4_d = 2;    
@@ -378,7 +388,6 @@ import vpu_pkg::*;
             if (!vtype_supported) begin
                 vtype_d.vill = 1'b1;
             end else begin
-
                 vtype_d = decoder_req.vtype;
                 vlmax_d = compute_vlmax(decoder_req.vtype.vsew, int_lmul4_d);
 
@@ -493,12 +502,16 @@ import vpu_pkg::*;
             int_lmul4_q <= int_lmul4_d;
 
             csr_res_push <= (vtype_valid || csr_lecture_valid);
+            // Duplicate filter state: see WORKAROUND note at prev_cfg_id declaration.
             if (fifo_instr_pop &&
                 (issue_instr_op == VSETVLI ||
                 issue_instr_op == VSETIVLI ||
                 issue_instr_op == VSETVL)) begin
                 prev_cfg_id       <= issue_instr_o.instr_issue.req.id;
                 prev_cfg_id_valid <= 1'b1;
+            end else if (fifo_instr_pop) begin
+                // Any other instruction popped
+                prev_cfg_id_valid <= 1'b0;
             end
             csr_fifo_res_q <= csr_fifo_res_d;
         end

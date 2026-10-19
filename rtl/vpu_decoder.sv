@@ -45,10 +45,13 @@ import rvv_instr_pkg::*;
     // Todo: register_read
 );
 
+    logic unused_illegal;   // get_emul() illegal flag, not used by the decoder
+
     always_comb begin : decoder
 
-        decoded_req_o = '0; 
+        decoded_req_o = '0;
         avl_o = '0;
+        unused_illegal = 1'b0;
 
         if (req_valid_i) begin
             
@@ -714,41 +717,42 @@ import rvv_instr_pkg::*;
 
                 default: ;           
             endcase
-            
+
             if (decoded_req_o.major_opcode == OPCODE_OP_V) begin     // is_arith
+                
                 unique case (decoded_req_o.fmt)
-                FMT_OPIVV, FMT_OPMVV_CSRRS: begin
-                    decoded_req_o.funct6        = instr_req_i.instr_issue.req.instr[31:26];
-                    decoded_req_o.vs1           = instr_req_i.instr_issue.req.instr[19:15];                   
-                    // decoded_req_o.vs2           = (instr_req_i.vec_instr != VMV_VV) ? instr_req_i.instr_issue.req.instr[24:20] : '0;
-                    decoded_req_o.vs2           = instr_req_i.instr_issue.req.instr[24:20];
-                    decoded_req_o.vd            = instr_req_i.instr_issue.req.instr[11:7];
-                    decoded_req_o.uses_vs1 = 1'b1;
-                    decoded_req_o.uses_vs2 = 1'b1;
-                end
-                FMT_OPIVX, FMT_OPMVX_CSRRSI: begin
-                    decoded_req_o.funct6        = instr_req_i.instr_issue.req.instr[31:26];                   
-                    decoded_req_o.vs2           = instr_req_i.instr_issue.req.instr[24:20];          
-                    decoded_req_o.rs1_data      = instr_req_i.instr_issue.register.rs[0];                   
-                    decoded_req_o.vd            = instr_req_i.instr_issue.req.instr[11:7];
+                    FMT_OPIVV, FMT_OPMVV_CSRRS: begin
+                        decoded_req_o.funct6        = instr_req_i.instr_issue.req.instr[31:26];
+                        decoded_req_o.vs1           = instr_req_i.instr_issue.req.instr[19:15];                   
+                        // decoded_req_o.vs2           = (instr_req_i.vec_instr != VMV_VV) ? instr_req_i.instr_issue.req.instr[24:20] : '0;
+                        decoded_req_o.vs2           = instr_req_i.instr_issue.req.instr[24:20];
+                        decoded_req_o.vd            = instr_req_i.instr_issue.req.instr[11:7];
+                        decoded_req_o.uses_vs1 = 1'b1;
+                        decoded_req_o.uses_vs2 = 1'b1;
+                    end
+                    FMT_OPIVX, FMT_OPMVX_CSRRSI: begin
+                        decoded_req_o.funct6        = instr_req_i.instr_issue.req.instr[31:26];                   
+                        decoded_req_o.vs2           = instr_req_i.instr_issue.req.instr[24:20];          
+                        decoded_req_o.rs1_data      = instr_req_i.instr_issue.register.rs[0];                   
+                        decoded_req_o.vd            = instr_req_i.instr_issue.req.instr[11:7];
 
-                    decoded_req_o.uses_rs1_scalar = 1'b1;
-                    decoded_req_o.uses_vs2        = 1'b1;
-                end
-                FMT_OPIVI_CSRRC: begin
-                    decoded_req_o.funct6        = instr_req_i.instr_issue.req.instr[31:26];                   
-                    decoded_req_o.vs2           = instr_req_i.instr_issue.req.instr[24:20];          
-                    decoded_req_o.imm5          = instr_req_i.instr_issue.req.instr[19:15];                   
-                    decoded_req_o.vd            = instr_req_i.instr_issue.req.instr[11:7];
+                        decoded_req_o.uses_rs1_scalar = 1'b1;
+                        decoded_req_o.uses_vs2        = 1'b1;
+                    end
+                    FMT_OPIVI_CSRRC: begin
+                        decoded_req_o.funct6        = instr_req_i.instr_issue.req.instr[31:26];                   
+                        decoded_req_o.vs2           = instr_req_i.instr_issue.req.instr[24:20];          
+                        decoded_req_o.imm5          = instr_req_i.instr_issue.req.instr[19:15];                   
+                        decoded_req_o.vd            = instr_req_i.instr_issue.req.instr[11:7];
 
-                    decoded_req_o.uses_imm = 1'b1;
-                    decoded_req_o.uses_vs2 = 1'b1;
-                end
-                FMT_OPCFG_CSRRCI: begin
-                    decoded_req_o.uses_rs1_scalar = (decoded_req_o.instr_enum == VSETVLI) || (decoded_req_o.instr_enum == VSETVL);
-                    decoded_req_o.uses_rs2_scalar = (decoded_req_o.instr_enum == VSETVL);
-                end
-                default: ;
+                        decoded_req_o.uses_imm = 1'b1;
+                        decoded_req_o.uses_vs2 = 1'b1;
+                    end
+                    FMT_OPCFG_CSRRCI: begin
+                        decoded_req_o.uses_rs1_scalar = (decoded_req_o.instr_enum == VSETVLI) || (decoded_req_o.instr_enum == VSETVL);
+                        decoded_req_o.uses_rs2_scalar = (decoded_req_o.instr_enum == VSETVL);
+                    end
+                    default: ;
                 endcase
 
                 // multiply-accumulate style ops also read vd as a source operand
@@ -756,6 +760,9 @@ import rvv_instr_pkg::*;
                 VMACC_VV, VMACC_VX, VNMSAC_VV, VNMSAC_VX,
                 VWMACCU_VV, VWMACCU_VX, VWMACC_VV, VWMACC_VX
                 };
+
+                decoded_req_o.emul = vtype_i.vlmul;     // TODO: modify for widen/narrow
+
             end
             else if (decoded_req_o.major_opcode == OPCODE_STORE) begin                                        //is_store
 
@@ -772,8 +779,9 @@ import rvv_instr_pkg::*;
                 
                 decoded_req_o.uses_vd_src     = 1'b1;                                                         // vs3 = store data, same field as vd
                 decoded_req_o.uses_vs2        = (decoded_req_o.mop == 2'b01) || (decoded_req_o.mop == 2'b11); // index 
+                                
+                decoded_req_o.emul = get_emul(instr_req_i.instr_issue.req.instr[14:12], vtype_i.vsew, vtype_i.vlmul, unused_illegal);
                 
-                // decoded_req_o.emul            = (eew / sew) * lmul;
             end
             else if (decoded_req_o.major_opcode == OPCODE_LOAD) begin                                        //is_load
 
@@ -789,13 +797,18 @@ import rvv_instr_pkg::*;
                 decoded_req_o.uses_vs2        = (decoded_req_o.mop == 2'b01) || (decoded_req_o.mop == 2'b11); // index  
                 decoded_req_o.vd              = instr_req_i.instr_issue.req.instr[11:7];
                 decoded_req_o.uses_vd_src     = 1'b1;
+
+                decoded_req_o.emul = get_emul(instr_req_i.instr_issue.req.instr[14:12], vtype_i.vsew, vtype_i.vlmul, unused_illegal);
+
             end 
             else if (decoded_req_o.major_opcode == OPCODE_SYSTEM) begin                                        
                 decoded_req_o.vd = instr_req_i.instr_issue.req.instr[11:7];
                 decoded_req_o.rs1_data = instr_req_i.instr_issue.req.instr[31:20];
+                decoded_req_o.emul = vtype_i.vlmul;
             end
         end
-
+        
+        decoded_req_o.eew       = elem_eew(decoded_req_o);
         decoded_req_o.writeback = instr_req_i.instr_issue.resp.writeback;
         
         // Alignment check

@@ -145,8 +145,10 @@
     task automatic fail(input string msg);
         error_count++;
         case_errors++;
-        if (case_errors <= 6)                 // do not flood the log
+        if (case_errors <= 6) begin                 // do not flood the log
             $error("[%0t] %s", $time, msg);
+            $stop;
+        end
     endtask
 
     task automatic check(input bit cond, input string msg);
@@ -199,7 +201,6 @@
             fail($sformatf("%s: instruction with ID=%h  %s but %s was expected", tag, id,
                            accepted ? "ACCEPTED" : "REJECTED",
                            expect_accept ? "accept" : "reject"));
-
         if (accepted) xif_model.wait_for_result(id, res);
     endtask
 

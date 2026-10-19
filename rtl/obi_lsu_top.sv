@@ -61,9 +61,10 @@ import vpu_pkg::*;
     logic [STRD_WIDTH-1:0] stride_d [PORTS];
     logic [STRD_WIDTH-1:0] stride_q [PORTS];
 
-    logic [XLEN-1:0] base_raddr;
+    // logic [XLEN-1:0] base_raddr;
+    vl_t    elem_base;
     integer element_count;      // Number of elements to process in vector fragment
-    integer frag_idx;           // Vector fragment index
+    // integer frag_idx;           // Vector fragment index
     integer elements_per_port;  // Max. number of elements that fit in that port.  
     integer offset_elements;    // Which element each ports starts from
     integer remaining_elements;
@@ -113,9 +114,10 @@ import vpu_pkg::*;
             end
         endcase
 
-        base_raddr    = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.dispatch_raddr1;
+        // base_raddr    = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.dispatch_raddr1;
+        elem_base     = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elem_base;
         element_count = int'(if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements);
-        frag_idx      = int'(if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.frag_idx);
+        // frag_idx      = int'(if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.row_vd);
         stride_value  = (instr_req.mop == 2'b10) ? int'(instr_req.rs2_data) :
                         int'(element_bytes_d);   // TODO: other mop cases
 
@@ -127,9 +129,10 @@ import vpu_pkg::*;
                             elements_per_port : remaining_elements;
             // addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'(offset_elements * stride_value);   // TODO: DATA_WIDTH? 
             // addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'(offset_elements * stride_value) + ADDR_WIDTH'(frag_idx * stride_value);   // TODO: DATA_WIDTH?   . Under dev          
-            addr_d[config_i] = base_raddr +
-                                ADDR_WIDTH'((frag_idx * PORTS + config_i)*(elements_per_port * stride_value));
+            // addr_d[config_i] = base_raddr +
+                                // ADDR_WIDTH'((frag_idx * PORTS + config_i)*(elements_per_port * stride_value));  // Temporary solution
                             //    ADDR_WIDTH'((frag_idx * PORTS + config_i) * stride_value);      // working only for eew32
+            addr_d[config_i] = instr_req.rs1_data + ADDR_WIDTH'((elem_base + config_i*elements_per_port) * stride_value);
             size_d[config_i] = SIZE_WIDTH'(port_elements * element_bytes_d);
             stride_d[config_i] = STRD_WIDTH'(stride_value);
             // $display("frag_idx=%d port=%d addr=%h offset_elements=%d remaining_elements=%d port_elements=%d",

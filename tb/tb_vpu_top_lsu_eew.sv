@@ -43,9 +43,9 @@ module tb_vpu_top_lsu_eew;
     //----------------------------------------------------------------------
     // Configuration  (match your VPU build)
     //----------------------------------------------------------------------
-    localparam int unsigned VLEN          = 128;   // bits
-    localparam int unsigned ELEN          = 32;    // bits
-    localparam int unsigned NUM_PORTS     = 1;     // OBI master ports of vpu_top
+    localparam int unsigned VLEN          = VPU_VLEN;   
+    localparam int unsigned ELEN          = 32;         
+    localparam int unsigned NUM_PORTS     = VPU_N_IPU;     // OBI master ports of vpu_top
     localparam int unsigned OBI_DATA_W    = 32;
     localparam bit          VTA           = 1'b1;
     localparam bit          VMA           = 1'b1;
@@ -88,7 +88,7 @@ module tb_vpu_top_lsu_eew;
         bit  align_ok  = emul_ok && vtb_vreg_aligned(c.vd, emul_x8);
         bit  legal     = emul_ok && align_ok;
         int  vlmax     = vtb_vlmax(VLEN, c.sew, c.lmul_log2);
-        int  exp_vl    = (c.avl < vlmax) ? c.avl : vlmax;
+        int  exp_vl    = vtb_expected_vl(c.avl, vlmax);
         int  nbytes    = exp_vl * c.eew / 8;
         int  buf_bytes = VLEN;                         // EMUL=8 -> 8 regs * VLEN/8 bytes
         bit  accepted;
@@ -154,9 +154,11 @@ module tb_vpu_top_lsu_eew;
             for (int b = 0; b < nbytes + GUARD; b++) begin
                 logic [7:0] exp = (b < nbytes) ? mem.read8(SRC_BASE + b) : SENTINEL;
                 logic [7:0] got = mem.read8(DST_BASE + b);
-                if (got !== exp)
+                if (got !== exp) begin
                     fail($sformatf("DST[%0d] = %02h, expected %02h (%s)", b, got, exp,
                                    (b < nbytes) ? "data" : "guard/tail"));
+                    $stop;
+                end
             end
         end else if (!legal && !accepted) begin
             check(mem.access_log.size() == 0, {"rejected vse still touched the bus: ", tag});

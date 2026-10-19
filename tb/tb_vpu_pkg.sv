@@ -41,6 +41,16 @@ package tb_vpu_pkg;
     localparam logic [5:0] F6_VSRL   = 6'b101000;
     localparam logic [5:0] F6_VSRA   = 6'b101001;
 
+    // OP-V funct6, single-width integer reductions (OPMVV group)
+    localparam logic [5:0] F6_VREDSUM  = 6'b000000;
+    localparam logic [5:0] F6_VREDAND  = 6'b000001;
+    localparam logic [5:0] F6_VREDOR   = 6'b000010;
+    localparam logic [5:0] F6_VREDXOR  = 6'b000011;
+    localparam logic [5:0] F6_VREDMINU = 6'b000100;
+    localparam logic [5:0] F6_VREDMIN  = 6'b000101;
+    localparam logic [5:0] F6_VREDMAXU = 6'b000110;
+    localparam logic [5:0] F6_VREDMAX  = 6'b000111;
+
     // One load/store test point
     typedef struct {
         int sew;        // SEW  programmed with vsetvli (bits)
@@ -123,6 +133,15 @@ package tb_vpu_pkg;
         return (vlen * vtb_lmul_x8(lmul_log2)) / (8 * sew);
     endfunction
 
+    // vl returned by vsetvl{i} for a given AVL. The spec fixes vl = AVL if AVL <= VLMAX
+    // and vl = VLMAX if AVL >= 2*VLMAX; in between any ceil(AVL/2) <= vl <= VLMAX is legal
+    // (implementation-defined, deterministic). Mirrors the DUT choice: ceil(AVL/2).
+    function automatic int vtb_expected_vl(input int unsigned avl, input int vlmax);
+        if (avl <= vlmax)          return avl;
+        else if (avl >= 2 * vlmax) return vlmax;
+        else                       return (avl + 1) / 2;
+    endfunction
+
     // ---------------------------------------------------------------------------
     // Expected-value helpers
     // ---------------------------------------------------------------------------
@@ -141,6 +160,31 @@ package tb_vpu_pkg;
     // Element written by vmv.v.i / vadd.vi ...: simm5 sign-extended to SEW bits
     function automatic logic [31:0] vtb_elem_from_simm5(input logic [4:0] simm5, input int sew);
         return vtb_trunc({{27{simm5[4]}}, simm5}, sew);
+    endfunction
+
+    // SEW-bit element sign-extended to 32 bits (for signed comparisons)
+    function automatic logic signed [31:0] vtb_sext(input logic [31:0] elem, input int sew);
+        return $signed(vtb_x_from_elem(elem, sew));
+    endfunction
+
+    // One step of a single-width integer reduction: acc OP elem, result truncated to SEW
+    function automatic logic [31:0] vtb_red_step(input rvv_instr_pkg::vec_instr_e instr,
+                                                 input logic [31:0] acc,
+                                                 input logic [31:0] elem,
+                                                 input int sew);
+        logic [31:0] a = vtb_trunc(acc, sew);
+        logic [31:0] e = vtb_trunc(elem, sew);
+        case (instr)
+            rvv_instr_pkg::VREDSUM_VS:  return vtb_trunc(a + e, sew);
+            rvv_instr_pkg::VREDAND_VS:  return a & e;
+            rvv_instr_pkg::VREDOR_VS:   return a | e;
+            rvv_instr_pkg::VREDXOR_VS:  return a ^ e;
+            rvv_instr_pkg::VREDMINU_VS: return (e < a) ? e : a;
+            rvv_instr_pkg::VREDMAXU_VS: return (e > a) ? e : a;
+            rvv_instr_pkg::VREDMIN_VS:  return (vtb_sext(e, sew) < vtb_sext(a, sew)) ? e : a;
+            rvv_instr_pkg::VREDMAX_VS:  return (vtb_sext(e, sew) > vtb_sext(a, sew)) ? e : a;
+            default: $fatal(1, "vtb_red_step: instruction %s not supported", instr.name());
+        endcase
     endfunction
  
     // Value written to the scalar register by vmv.x.s: element 0 of vs2, sign-extended
@@ -335,6 +379,29 @@ package tb_vpu_pkg;
         return vtb_opv(f6, m, s2, op1, f3, vd);
     endfunction
  
+    // vred<op>.vs vd, vs2, vs1   (OPMVV)  : vd[0] = vs1[0] OP vs2[0..vl-1]
+    function automatic logic [31:0] vtb_enc_red(
+        input rvv_instr_pkg::vec_instr_e instr,
+        input logic [4:0] vd,
+        input logic [4:0] vs2,
+        input logic [4:0] vs1,
+        input logic       vm = 1'b1
+    );
+        logic [5:0] f6;
+        case (instr)
+            rvv_instr_pkg::VREDSUM_VS:  f6 = F6_VREDSUM;
+            rvv_instr_pkg::VREDAND_VS:  f6 = F6_VREDAND;
+            rvv_instr_pkg::VREDOR_VS:   f6 = F6_VREDOR;
+            rvv_instr_pkg::VREDXOR_VS:  f6 = F6_VREDXOR;
+            rvv_instr_pkg::VREDMINU_VS: f6 = F6_VREDMINU;
+            rvv_instr_pkg::VREDMIN_VS:  f6 = F6_VREDMIN;
+            rvv_instr_pkg::VREDMAXU_VS: f6 = F6_VREDMAXU;
+            rvv_instr_pkg::VREDMAX_VS:  f6 = F6_VREDMAX;
+            default: $fatal(1, "vtb_enc_red: instruction %s not supported", instr.name());
+        endcase
+        return vtb_opv(f6, vm, vs2, vs1, FMT_OPMVV_CSRRS, vd);
+    endfunction
+
     // vmv.x.s rd, vs2   (OPMVV, funct6=VWXUNARY0, vs1=0)  : x[rd] = sext(vs2[0])
     function automatic logic [31:0] vtb_vmv_xs(input logic [4:0] rd, input logic [4:0] vs2);
         return vtb_opv(F6_VWXUNARY0, 1'b1, vs2, 5'b00000, FMT_OPMVV_CSRRS, rd);

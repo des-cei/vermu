@@ -935,7 +935,7 @@ import vpu_pkg::*;
                         uses_vd  = 1'b1;
                         emul_vd   = vtype_i.vlmul;    
                     end
-                    VMV_XS,
+                    // VMV_XS: ignores LMUL and register groups (RVV 16.1), no reg check
                     VMSBF_M, VMSOF_M, VMSIF_M: begin
                         uses_vs2 = 1'b1;
                         emul_vs2 = vtype_i.vlmul;
@@ -997,10 +997,7 @@ import vpu_pkg::*;
                         emul_vd  = lmul_x2(vtype_i.vlmul, illegal_emul_vd);
                         emul_vs2 = lmul_x2(vtype_i.vlmul, illegal_emul_vs2);
                     end
-                    VMV_SX: begin
-                        uses_vd  = 1'b1;
-                        emul_vd = vtype_i.vlmul;
-                    end 
+                    // VMV_SX: ignores LMUL and register groups (RVV 16.1), no reg check
 
                     // FMT_OPCFG_CSRRCI no check needed
 

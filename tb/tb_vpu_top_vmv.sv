@@ -123,7 +123,7 @@ module tb_vpu_top_vmv;
         bit vs1_ok    = !is_vv || vtb_vreg_aligned(c.vs1, lmul_x8);
         bit legal     = vd_ok && vs1_ok;
         int vlmax     = vtb_vlmax(VLEN, c.sew, c.lmul_log2);
-        int exp_vl    = (c.avl < vlmax) ? c.avl : vlmax;
+        int exp_vl    = vtb_expected_vl(c.avl, vlmax);
         int grp_bytes = vlmax * c.sew / 8;
         bit same_reg  = is_vv && (c.vd == c.vs1);
         logic [31:0] old_base = same_reg ? SRC_BASE : OLD_BASE;   // vd content before the vmv
@@ -219,7 +219,6 @@ module tb_vpu_top_vmv;
     //----------------------------------------------------------------------
     // Test sequence
     //----------------------------------------------------------------------
-    // int          sews     [1] = '{8};
     int          sews     [3] = '{8, 16, 32};
     logic [31:0] scalars  [5] = '{32'hDEAD_BEEF, 32'h1234_5678,
                                   32'h8000_0080, 32'h0000_00A5, 32'hFFFF_FFFF};

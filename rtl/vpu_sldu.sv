@@ -3,6 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
+// Future implementation should look for an optimized design that reuses 
+// operations if possible instead of a analysing particular instructions.
+// disp_decoded_i.is_permutation || disp_decoded_i.is_reduction ||
+//  disp_decoded_i.is_widening || disp_decoded_i.is_narrowing
+
 module vpu_sldu 
     import vpu_pkg::*; 
     import rvv_instr_pkg::*;
@@ -11,23 +16,31 @@ module vpu_sldu
     input  logic rst_ni,
     input  dw_t  op_s1_i,
     input  dw_t  op_s2_i,
+    input  dw_t  op_d_i,
     output dw_t  result_o,
     if_xif_exe.exe_unit if_exe_wrapper
 );
     logic                  req_valid, is_last, result_valid;
-    logic [FRAG_CNT_W-1:0] frag_idx;
+    // logic [FRAG_CNT_W-1:0] frag_idx;
+    logic [FRAG_CNT_W-1:0] next_frag;
     vl_t                   iter_vl;
     vec_instr_e            instr;
+    logic                  vm;
     sew_e                  sew;
-    vl_t                   csr_vl;
+    vl_t                   csr_vl, vstart;
+    logic                  is_reduction;
 
-    assign req_valid = if_exe_wrapper.wrapper_exe_instr_valid;
-    assign is_last   = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.is_last; 
-    assign frag_idx  = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.frag_idx; 
-    assign iter_vl   = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
-    assign instr     = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.instr_enum;
-    assign sew       = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vtype.vsew;
-    assign csr_vl    = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vl;
+    assign req_valid    = if_exe_wrapper.wrapper_exe_instr_valid;
+    assign is_last      = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.is_last; 
+    // assign frag_idx     = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.frag_idx; 
+    assign next_frag     = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.next_frag; 
+    assign iter_vl      = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
+    assign instr        = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.instr_enum;
+    assign vm           = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vm;
+    assign is_reduction = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.is_reduction;
+    assign sew          = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vtype.vsew;
+    assign csr_vl       = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vl;
+    assign vstart       = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vstart;
 
     dw_t         op_s1;
     logic [31:0] scalar_val, result_data;
@@ -63,48 +76,33 @@ module vpu_sldu
         endcase
     end
 
-    int sew_bits;
-    int bit_index; 
-    int lane_idx; 
-    
+    logic [31:0] acc;
+
     always_comb begin
-        sew_bits = get_sew_bits(sew);
+        automatic int sew_bits;
+        automatic int bit_index;
+
+        sew_bits = get_eew_bits(sew);
         bit_index = '0;
 
+        acc = '0;
         result_data  = '0;
         result_o     = '0;
         result_valid = '0;
         if (req_valid) begin
             unique case (instr)
                 VMV_XS: begin
-                    if (frag_idx == 0) begin
-                        unique case (sew)
-                            SEW_8: begin
-                                result_data = {{24{op_s2_i[7]}}, op_s2_i[7:0]};
-                            end
-                            SEW_16: begin
-                                result_data = {{16{op_s2_i[15]}}, op_s2_i[15:0]};
-                            end
-                            SEW_32: begin
-                                result_data = {op_s2_i[31:0]};
-                            end
-                            default:;
-                        endcase
-                        result_valid = 1'b1;
-                    end
-                end
-                VMV_SX: begin
-                    if (frag_idx == 0) begin
-                        if (csr_vl != 0) begin
+                    if (vm) begin
+                        if (next_frag == 0) begin
                             unique case (sew)
                                 SEW_8: begin
-                                    result_o[7:0] = scalar_val[7:0];
+                                    result_data = {{24{op_s2_i[7]}}, op_s2_i[7:0]};
                                 end
                                 SEW_16: begin
-                                    result_o[15:0] = scalar_val[15:0];
+                                    result_data = {{16{op_s2_i[15]}}, op_s2_i[15:0]};
                                 end
                                 SEW_32: begin
-                                    result_o[31:0] = scalar_val[31:0];
+                                    result_data = {op_s2_i[31:0]};
                                 end
                                 default:;
                             endcase
@@ -112,12 +110,32 @@ module vpu_sldu
                         result_valid = 1'b1;
                     end
                 end
+                VMV_SX: begin
+                    if (vm) begin
+                        if (next_frag == 0) begin
+                            if (csr_vl != 0 && !(vstart >= csr_vl)) begin
+                                unique case (sew)
+                                    SEW_8: begin
+                                        result_o[7:0] = scalar_val[7:0];
+                                    end
+                                    SEW_16: begin
+                                        result_o[15:0] = scalar_val[15:0];
+                                    end
+                                    SEW_32: begin
+                                        result_o[31:0] = scalar_val[31:0];
+                                    end
+                                    default:;
+                                endcase
+                            end 
+                        end
+                        result_valid = 1'b1;
+                    end 
+                end
                 VMV_VV,
                 VMV_VX,
                 VMV_VI: begin
                     for (int elem = 0; elem < iter_vl; elem++) begin
                         bit_index   = elem * sew_bits;  
-                        lane_idx    = bit_index / 32;   
                         unique case (sew)
                             SEW_8:  result_o[bit_index +:  8] = op_s1[bit_index +:  8];
                             SEW_16: result_o[bit_index +: 16] = op_s1[bit_index +: 16];
@@ -131,19 +149,56 @@ module vpu_sldu
                     result_o = op_s2_i;
                     result_valid = 1'b1;
                 end
+                VREDSUM_VS: begin       // TODO: assign masked reduction
+                    // # vd[0] = sum( vs1[0] , vs2[*] )
+                    unique case (sew)
+                        SEW_8: begin
+                            acc[7:0] = (next_frag == 0) ? op_s1[7:0] : op_d_i[7:0];
+                            for (int e = 0; e < DW/8; e++)
+                                if (e < iter_vl) acc[7:0] += op_s2_i[e*8 +: 8];
+                        end
+                        SEW_16: begin
+                            acc[15:0] = (next_frag == 0) ? op_s1[15:0] : op_d_i[15:0];
+                            for (int e = 0; e < DW/16; e++)
+                                if (e < iter_vl) acc[15:0] += op_s2_i[e*16 +: 16];
+                        end
+                        SEW_32: begin
+                            acc = (next_frag == 0) ? op_s1[31:0] : op_d_i[31:0];
+                            for (int e = 0; e < DW/32; e++)
+                                if (e < iter_vl) acc += op_s2_i[e*32 +: 32];
+                        end
+                        default: ;
+                    endcase
+                    result_o[31:0] = acc;   // only element 0 (SEW bits) is meaningful; rest is 0
+                    result_valid   = 1'b1;
+                end
                 default: ;
             endcase 
         end
     end
 
+    dispatch_sideband_t res_frag;
+
     // Output to XIF wrapper
-    assign if_exe_wrapper.exe_wrapper_recv_instr_ready                             = 1'b1;               // TODO: Ready for new instruction
+    assign if_exe_wrapper.exe_wrapper_recv_instr_ready                             = 1'b1;         // TODO: Ready for new instruction
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_valid_exec_o   = result_valid; // Instruction finished
-    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o    = result_data;        // TODO ?  
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.result_data_exec_o    = result_data;  // vmv.s.x        
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.req      = if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.req;
     assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.resp     = if_exe_wrapper.wrapper_exe_instr_issue.instr_issue.resp;
-    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.register = '0;                 // TODO ?
+    assign if_exe_wrapper.exe_wrapper_result.xif_fifo_result.issue_exec_o.register = '0;                 
 
-    assign if_exe_wrapper.exe_wrapper_result.instr_decoded = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded;
-    assign if_exe_wrapper.exe_wrapper_result.instr_fragment= if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
+    assign if_exe_wrapper.exe_wrapper_result.instr_decoded           = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded;
+
+    always_comb begin
+        res_frag = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
+        if (is_reduction) begin
+            // res_frag.elements  = vl_t'(1);   // only vd[0] is body
+            // res_frag.elem_base = '0;
+            res_frag.row_vd = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.row_vs2; // Writing result requires normal idx increment  
+        end
+    end
+
+    assign if_exe_wrapper.exe_wrapper_result.instr_fragment = res_frag;
+    // assign if_exe_wrapper.exe_wrapper_result.instr_fragment = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
+
 endmodule

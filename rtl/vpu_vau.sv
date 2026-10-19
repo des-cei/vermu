@@ -182,7 +182,7 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
     always_comb begin : simd
         simd_result    = '0;
         result_valid_o = 1'b0;
-        sew_bits = get_sew_bits(sew_i);
+        sew_bits = get_eew_bits(sew_i);
         if (operation_valid_i) begin
             result_valid_o = 1'b1;  
             unique case (operation_i)

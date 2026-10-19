@@ -109,7 +109,7 @@ module tb_vpu_vregfile;
         vlen_t mask;
         int sew_bits, bpe, elem_cnt, eidx;
         mask     = '0;
-        sew_bits = get_sew_bits(req.vtype.vsew);
+        sew_bits = get_eew_bits(req.vtype.vsew);
         bpe      = sew_bits / 8;
         elem_cnt = VPU_VLEN / sew_bits;
         for (int b = 0; b < VLENB; b++) begin
@@ -131,7 +131,7 @@ module tb_vpu_vregfile;
         int sew_bits, bpe, eidx;
         logic in_body, enabled;
         merged   = old_vd;
-        sew_bits = get_sew_bits(req.vtype.vsew);
+        sew_bits = get_eew_bits(req.eew);
         bpe      = sew_bits / 8;
 
         if (req.is_load) begin

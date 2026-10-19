@@ -24,7 +24,8 @@ module simd_controller
 
     assign operation = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.operation;
     assign iter_vl = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
-    assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vtype.vsew;
+    // assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vtype.vsew;
+    assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.eew;
 
     dw_t         op_s1;
     logic [31:0] scalar_val;
@@ -96,7 +97,7 @@ module simd_controller
 
     always_comb begin
         lane_limit = get_lane_limit(sew, iter_vl); 
-        sew_bits = get_sew_bits(sew);
+        sew_bits = get_eew_bits(sew);
     
         lane_op_s1  = '0;
         lane_op_s2  = '0;

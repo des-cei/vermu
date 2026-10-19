@@ -32,7 +32,7 @@ module vpu_dispatch
         logic [4:0]                 vs1_base;
         logic [4:0]                 vs2_base;
         logic [XLEN-1:0]            rs1_base;
-        logic [3:0]                 lmul_val;       
+        logic [3:0]                 emul_val;       
         logic [FRAG_CNT_W-1:0]      total_frags;    
         logic                       uses_vs1;
         logic                       uses_vs2;
@@ -45,7 +45,15 @@ module vpu_dispatch
         x_issue_t                   issue_meta;
     } slot_t;
 
-    slot_t [MAX_INFLIGHT-1:0] slot_q, slot_d;
+    typedef struct packed {
+        logic [4:0]            vs1, vs2, vd;
+        logic [ROW_W-1:0]      row_vs1, row_vs2, row_vd;
+        logic [FRAG_CNT_W-1:0] vd_frag;
+        logic                  vd_frag_done;
+    } opnd_view_t;
+
+    slot_t [MAX_INFLIGHT-1:0]      slot_q, slot_d;
+    opnd_view_t [MAX_INFLIGHT-1:0] view;
 
     dispatch_sideband_t [MAX_INFLIGHT-1:0] dispatch_last;   
 
@@ -90,8 +98,8 @@ module vpu_dispatch
 
     function automatic logic [FRAG_CNT_W-1:0] calc_total_frags(
         input logic [7:0] vl,
-        input sew_e       vsew,     
-        input logic [3:0] lmul_val,
+        input sew_e       veew,     
+        input logic [3:0] emul_val,
         input vec_instr_e vec_instr,
         input logic       vta
     );
@@ -99,39 +107,37 @@ module vpu_dispatch
         int unsigned tf;
         int unsigned max_frags;
 
-        case (vsew)
-            SEW_8:   epf = DW /  8;  
-            SEW_16:  epf = DW / 16;  
-            default: epf = DW / 32;  
-        endcase
+        epf = calc_epf(veew);
+
         if (epf == '0) epf = 1;                        // TODO: not real
         tf        = (vl + epf - 1) / epf;
         if (vl != 0 && tf == 0) tf = 1;                // Instructions with single fragment
         if (vec_instr == VMV_SX && vl == 0) tf = 1;
-        // else if (vec_instr == VMV_XS) tf = 1;       // Not considered LMUL > 1 
+
 
         // $display(
-            // "vl=%0d vsew=%0d DW=%0d epf=%0d tf(before)=%0d N_IPU=%0d lmul_val=%0d limit=%0d",
-            // vl,
-            // vsew,
-            // DW,
-            // epf,
-            // tf,
-            // VPU_N_IPU,
-            // lmul_val,
-            // VPU_N_IPU * lmul_val
+        //     "vl=%0d veew=%0d DW=%0d epf=%0d tf(before)=%0d N_IPU=%0d emul_val=%0d limit=%0d",
+        //     vl,
+        //     veew,
+        //     DW,
+        //     epf,
+        //     tf,
+        //     VPU_N_IPU,
+        //     emul_val,
+        //     VPU_N_IPU * emul_val
         // );
 
-        max_frags = FRAGS_PER_REG * lmul_val;
+        max_frags = FRAGS_PER_REG * emul_val;
         if (max_frags == '0) max_frags = 1;
         if (tf > max_frags) tf = max_frags;
         if (vta) tf = max_frags;                // If vta, whole register to be processed
+        if (vec_instr == VMV_XS) tf = 1;          // Not considered LMUL > 1 
 
         // $display(
         //     "tf=%0d limit=%0d clamp=%0b",
         //     tf,
-        //     VPU_N_IPU * lmul_val,
-        //     (tf > FRAG_CNT_W'(VPU_N_IPU * lmul_val))
+        //     VPU_N_IPU * emul_val,
+        //     (tf > FRAG_CNT_W'(VPU_N_IPU * emul_val))
         // );
 
         return FRAG_CNT_W'(tf);
@@ -139,26 +145,28 @@ module vpu_dispatch
 
     function automatic vl_t calc_elements_for_frag(
         input vl_t             vl,
-        input sew_e            vsew,
+        input sew_e            veew,
         input vec_instr_e      instr,
         input logic [FRAG_CNT_W-1:0] frag
     );
         // TODO: add vstart consideration
         vl_t epf;
         vl_t consumed;
-        
-        // Max elements per fragment 
-        case (vsew)
-            SEW_8:   epf = vl_t'(DW /  8);  
-            SEW_16:  epf = vl_t'(DW / 16);  
-            default: epf = vl_t'(DW / 32);
-        endcase
+       
+        epf = calc_epf(veew);   // Max elements per fragment 
+
         if (epf == '0) epf = 1;
 
         consumed = vl_t'(frag) * epf;
         if (instr == VMVNRR_V) 
             return epf;
-        else if (consumed >= vl)
+        else if ((instr == VMV_XS ) && frag == '0)
+            return 1;
+            // TODO same vmv_sx condition?
+        else if (instr == VMV_SX) begin
+            if (frag == '0) return 1;
+            else return 0;
+        end else if (consumed >= vl)
             return '0;
         else if (vl - consumed > epf)
             return epf;
@@ -195,13 +203,42 @@ module vpu_dispatch
         return (age != '0) && !age[X_ID_WIDTH-1];
     endfunction
 
+    function automatic opnd_view_t calc_view(input slot_t s,
+                                            input logic [REG_OFF_W-1:0] roffset,
+                                            input logic [ROW_W-1:0]     row);
+        opnd_view_t v;
+        logic last = (s.next_frag == s.total_frags - 1);
+
+        // default: every operand walks the group in lockstep
+        v.vs1 = s.vs1_base + 5'(roffset);
+        v.vs2 = s.vs2_base + 5'(roffset);
+        v.vd  = s.vd_base  + 5'(roffset);
+        v.row_vs1 = row;    
+        v.row_vs2 = row;    
+        v.row_vd  = row;    
+        v.vd_frag      = s.next_frag;
+        v.vd_frag_done = 1'b1;
+
+        if (s.decoded.is_reduction) begin
+            // vs1[0] and vd[0] are scalars (EMUL=1); vd holds a partial sum until the last step
+            v.vs1 = s.vs1_base;
+            v.vd  = s.vd_base;
+            v.row_vs1 = '0;
+            v.row_vd  = '0; 
+            v.vd_frag      = '0;
+            v.vd_frag_done = last;
+        end
+        // future: is_widening / is_narrowing cases go here
+        return v;
+    endfunction
+
     /////////////////////////////////
     // Per-slot address derivation //
     /////////////////////////////////
 
-    logic [MAX_INFLIGHT-1:0][REG_OFF_W-1:0]             reg_offset;
-    logic [MAX_INFLIGHT-1:0][$clog2(FRAGS_PER_REG)-1:0] frag_in_reg;
-    logic [MAX_INFLIGHT-1:0][XLEN-1:0]                  mem_offset;     
+    logic [MAX_INFLIGHT-1:0][REG_OFF_W-1:0] reg_offset;
+    logic [MAX_INFLIGHT-1:0][ROW_W-1:0]     frag_in_reg;
+    logic [MAX_INFLIGHT-1:0][XLEN-1:0]      mem_offset;     
     
     always_comb begin
 
@@ -212,6 +249,7 @@ module vpu_dispatch
             // Which register in LMUL group
             reg_offset[i]  = REG_OFF_W'(slot_q[i].next_frag / FRAGS_PER_REG);
             // Which slice within register
+            // frag_in_reg[i] = slot_q[i].next_frag[$clog2(FRAGS_PER_REG)-1:0];
             frag_in_reg[i] = slot_q[i].next_frag % FRAGS_PER_REG;
             // LS instructions
             mem_offset[i] = XLEN'( (slot_q[i].next_frag >> LOG2_N_IPU) << LOG2_VREG_BYTES );       
@@ -223,20 +261,29 @@ module vpu_dispatch
     /////////////////////////////////
     
     logic [MAX_INFLIGHT-1:0] slot_hazard; 
-    logic [4:0] cur_vs1, cur_vs2, cur_vd;
+    // logic [4:0] cur_vs1, cur_vs2, cur_vd;
 
     always_comb begin
         slot_hazard = '0;
 
         for (int s = 0; s < MAX_INFLIGHT; s++) begin
+
+            view[s] = calc_view(slot_q[s], reg_offset[s], ROW_W'(frag_in_reg[s]));
+
             // All fragments dispatched. No hazard.
             if (!slot_q[s].valid) continue;
             if (slot_q[s].next_frag >= slot_q[s].total_frags) continue;
 
             // Current register addresses for slot s's next fragment
-            cur_vs1 = slot_q[s].vs1_base + 5'(reg_offset[s]);
-            cur_vs2 = slot_q[s].vs2_base + 5'(reg_offset[s]);
-            cur_vd  = slot_q[s].vd_base  + 5'(reg_offset[s]);
+            // if (slot_q[s].decoded.is_reduction) begin
+            //     cur_vs1 = slot_q[s].vs1_base;
+            //     cur_vs2 = slot_q[s].vs2_base + 5'(reg_offset[s]);
+            //     cur_vd  = slot_q[s].vd_base;
+            // end else begin
+            //     cur_vs1 = slot_q[s].vs1_base + 5'(reg_offset[s]);
+            //     cur_vs2 = slot_q[s].vs2_base + 5'(reg_offset[s]);
+            //     cur_vd  = slot_q[s].vd_base  + 5'(reg_offset[s]);
+            // end 
 
             for (int p = 0; p < MAX_INFLIGHT; p++) begin
                 if (p == s)            continue;
@@ -249,12 +296,14 @@ module vpu_dispatch
 
                 // RAW: vs1 depends on p's vd
                 if (slot_q[s].uses_vs1) begin
-                    if (cur_vs1 >= slot_q[p].vd_base && cur_vs1 <  slot_q[p].vd_base + 5'(slot_q[p].lmul_val)) begin
+                    if (view[s].vs1 >= slot_q[p].vd_base && view[s].vs1 <  slot_q[p].vd_base + 5'(slot_q[p].emul_val)) begin
                         automatic logic [FRAG_CNT_W-1:0] fg;
                         // fg index into p's frag_done_mask:
-                        fg = FRAG_CNT_W'((cur_vs1 - slot_q[p].vd_base)) *
-                             FRAG_CNT_W'(FRAGS_PER_REG) +
-                             FRAG_CNT_W'(frag_in_reg[s]);
+                        fg = FRAG_CNT_W'(view[s].vs1 - slot_q[p].vd_base) * 
+                             FRAG_CNT_W'(FRAGS_PER_REG)  + 
+                             FRAG_CNT_W'(view[s].row_vs1);
+
+                        if (!slot_q[p].frag_done_mask[fg]) slot_hazard[s] = 1'b1;
 
                         // $display("%0t fg=%0d qmask=%b dmask=%b wb_valid=%0b wb_frag=%0d",
                         //     $time,
@@ -264,66 +313,62 @@ module vpu_dispatch
                         //     wb_valid[p],
                         //     wb_frag[p]);
 
-                        if (!slot_q[p].frag_done_mask[fg]) begin
-                            slot_hazard[s] = 1'b1;
-
-                            // $display("%0t: RAW vs1, s=%0d p=%0d fg of p's=%0d cur_vs1=%0d vd_base=%0d frag_in_reg=%0d FRAGS_PER_REG=%0d lmul=%0d",
-                            //     $time, s, p, fg, cur_vs1, slot_q[p].vd_base, frag_in_reg[s], FRAGS_PER_REG, slot_q[p].lmul_val);
-                        end
+                        // $display("%0t: RAW vs1, s=%0d p=%0d fg of p's=%0d view[s].vs1=%0d vd_base=%0d frag_in_reg=%0d FRAGS_PER_REG=%0d lmul=%0d",
+                        //     $time, s, p, fg, view[s].vs1, slot_q[p].vd_base, frag_in_reg[s], FRAGS_PER_REG, slot_q[p].emul_val);
                     end
                 end
 
                 // RAW: vs2 depends on p's vd 
                 if (slot_q[s].uses_vs2) begin
-                    if (cur_vs2 >= slot_q[p].vd_base &&
-                        cur_vs2 <  slot_q[p].vd_base + 5'(slot_q[p].lmul_val))
+                    if (view[s].vs2 >= slot_q[p].vd_base &&
+                        view[s].vs2 <  slot_q[p].vd_base + 5'(slot_q[p].emul_val))
                     begin
                         automatic logic [FRAG_CNT_W-1:0] fg;
-                        fg = FRAG_CNT_W'((cur_vs2 - slot_q[p].vd_base)) *
+                        fg = FRAG_CNT_W'(view[s].vs2 - slot_q[p].vd_base) *
                              FRAG_CNT_W'(FRAGS_PER_REG) +
-                             FRAG_CNT_W'(frag_in_reg[s]);
+                             FRAG_CNT_W'(view[s].row_vs2);
 
                         if (!slot_q[p].frag_done_mask[fg]) begin
                             slot_hazard[s] = 1'b1;
 
-                            // $display("%0t: RAW vs2, s=%0d p=%0d fg=%0d cur_vs2=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
-                            //     $time, s, p, fg, cur_vs2, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].lmul_val);
+                            // $display("%0t: RAW vs2, s=%0d p=%0d fg=%0d view[s].vs2=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
+                            //     $time, s, p, fg, view[s].vs2, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_val);
                         end
                     end
                 end
 
                 // RAW: vd_src  
                 if (slot_q[s].uses_vd_src) begin
-                    if (cur_vd >= slot_q[p].vd_base &&
-                        cur_vd <  slot_q[p].vd_base + 5'(slot_q[p].lmul_val))
+                    if (view[s].vd >= slot_q[p].vd_base &&
+                        view[s].vd <  slot_q[p].vd_base + 5'(slot_q[p].emul_val))
                     begin
                         automatic logic [FRAG_CNT_W-1:0] fg;
-                        fg = FRAG_CNT_W'((cur_vd - slot_q[p].vd_base)) *
+                        fg = FRAG_CNT_W'(view[s].vd - slot_q[p].vd_base) *
                              FRAG_CNT_W'(FRAGS_PER_REG) +
-                             FRAG_CNT_W'(frag_in_reg[s]);
+                             FRAG_CNT_W'(view[s].row_vd);
                         if (!slot_q[p].frag_done_mask[fg]) begin
                             slot_hazard[s] = 1'b1;
 
-                            // $display("%0t: RAW vd_src, s=%0d p=%0d fg=%0d cur_vd=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
-                            //     $time, s, p, fg, cur_vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].lmul_val);
+                            // $display("%0t: RAW vd_src, s=%0d p=%0d fg=%0d view[s].vd=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
+                            //     $time, s, p, fg, view[s].vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_val);
                         end
                     end
                 end
 
                 // WAW: both slots writing same register group.
-                if (cur_vd >= slot_q[p].vd_base &&
-                    cur_vd <  slot_q[p].vd_base + 5'(slot_q[p].lmul_val))
+                if (view[s].vd >= slot_q[p].vd_base &&
+                    view[s].vd <  slot_q[p].vd_base + 5'(slot_q[p].emul_val))
                 begin
                     automatic logic [FRAG_CNT_W-1:0] fg;
-                    fg = FRAG_CNT_W'((cur_vd - slot_q[p].vd_base)) *
+                    fg = FRAG_CNT_W'(view[s].vd - slot_q[p].vd_base) *
                          FRAG_CNT_W'(FRAGS_PER_REG) +
-                         FRAG_CNT_W'(frag_in_reg[s]);
+                         FRAG_CNT_W'(view[s].row_vd);
 
                     if (!slot_q[p].frag_done_mask[fg]) begin
                         slot_hazard[s] = 1'b1;
                         
                         // $display("%0t: WAW, s=%0d p=%0d fg=%0d cur_vd=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
-                        //         $time, s, p, fg, cur_vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].lmul_val);
+                        //         $time, s, p, fg, view[s].vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_val);
                         // $display(
                         //     "WAW: s=%0d p=%0d s_id=%0d p_id=%0d next_frag_s=%0d next_frag_p=%0d",
                         //     s, p,
@@ -362,9 +407,6 @@ module vpu_dispatch
         dispatch_last = '0;
 
         for (int i = 0; i < MAX_INFLIGHT; i++) begin
-            logic [4:0]          vs1_addr, vs2_addr, vd_addr;
-            logic [XLEN-1:0]     rs1_addr;
-
             slot_issue_en[i] = slot_q[i].valid
                              && (slot_q[i].next_frag < slot_q[i].total_frags)
                              && !slot_hazard[i]
@@ -372,27 +414,28 @@ module vpu_dispatch
 
             fu_instr_valid[i] = slot_issue_en[i];
             if (slot_issue_en[i]) begin
-                vs1_addr = slot_q[i].vs1_base + 5'(reg_offset[i]);
-                vs2_addr = slot_q[i].vs2_base + 5'(reg_offset[i]);
-                vd_addr  = slot_q[i].vd_base  + 5'(reg_offset[i]);
-                rs1_addr = slot_q[i].rs1_base + mem_offset[i];
+                automatic sew_e esew = elem_eew(slot_q[i].decoded);
+
                 // Fragment index for data allocation in functional units
-                dispatch_last[i].is_last = (slot_q[i].next_frag == slot_q[i].total_frags - 1);
-                dispatch_last[i].frag_idx = frag_in_reg[i];
-                dispatch_last[i].elements = calc_elements_for_frag(
-                    slot_q[i].decoded.vl,
-                    slot_q[i].decoded.vtype.vsew,
-                    slot_q[i].decoded.instr_enum,
-                    slot_q[i].next_frag);
-                dispatch_last[i].next_frag = slot_q[i].next_frag;
+                dispatch_last[i].next_frag    = slot_q[i].next_frag;
+                dispatch_last[i].is_last      = (slot_q[i].next_frag == slot_q[i].total_frags - 1);
+                // Patch register addresses considering LMUL impact
+                dispatch_last[i].dispatch_vs1 = view[i].vs1;
+                dispatch_last[i].dispatch_vs2 = view[i].vs2;
+                dispatch_last[i].dispatch_vd  = view[i].vd;
+                dispatch_last[i].row_vs1      = view[i].row_vs1;
+                dispatch_last[i].row_vs2      = view[i].row_vs2;
+                dispatch_last[i].row_vd       = view[i].row_vd;
+                dispatch_last[i].vd_frag      = view[i].vd_frag;
+                dispatch_last[i].vd_frag_done = view[i].vd_frag_done;
+                dispatch_last[i].elem_base    = vl_t'(slot_q[i].next_frag) * calc_epf(esew);   // source element space
+                dispatch_last[i].elements     = calc_elements_for_frag(slot_q[i].decoded.vl, esew,
+                                                slot_q[i].decoded.instr_enum, slot_q[i].next_frag);
+                // dispatch_last[i].dispatch_raddr1 = slot_q[i].rs1_base + mem_offset[i];
+                dispatch_last[i].dispatch_raddr1 = '0;
+
                 // Start from stored metadata
                 issue = slot_q[i].issue_meta;
-
-                // Patch register addresses considering LMUL impact
-                dispatch_last[i].dispatch_vs1 = vs1_addr;
-                dispatch_last[i].dispatch_vs2 = vs2_addr;
-                dispatch_last[i].dispatch_vd = vd_addr;
-                dispatch_last[i].dispatch_raddr1 = rs1_addr;
                 
                 fu_instr_issue[i].instr_issue    = issue;
                 fu_instr_issue[i].instr_decoded  = slot_q[i].decoded;
@@ -440,7 +483,7 @@ module vpu_dispatch
     //         for (int p = 0; p < MAX_INFLIGHT; p++) begin
     //             if (slot_q[p].valid) begin
     //                 // Overlap if ranges intersect
-    //                 if ((disp_decoded_i.vd < slot_q[p].vd_base + 5'(slot_q[p].lmul_val)) &&
+    //                 if ((disp_decoded_i.vd < slot_q[p].vd_base + 5'(slot_q[p].emul_val)) &&
     //                     (slot_q[p].vd_base  < disp_decoded_i.vd + 5'(new_lmul)))
     //                     new_waw = 1'b1;
     //             end
@@ -469,12 +512,14 @@ module vpu_dispatch
     logic [MAX_INFLIGHT-1:0]                 wb_valid;   // fragment writeback this cycle
     logic [MAX_INFLIGHT-1:0][FRAG_CNT_W-1:0] wb_frag;    // which fragment completed
     logic [MAX_INFLIGHT-1:0]                 wb_is_last; // last fragment of instruction
+    logic [MAX_INFLIGHT-1:0]                 wb_done;    // last fragment of instruction
 
     always_comb begin
         for (int i = 0; i < MAX_INFLIGHT; i++) begin
-            wb_valid[i] = fu_result[i].xif_fifo_result.result_valid_exec_o && slot_q[i].valid;
-            wb_frag[i] = fu_result[i].instr_fragment.frag_idx;
+            wb_valid[i]   = fu_result[i].xif_fifo_result.result_valid_exec_o && slot_q[i].valid;
+            wb_frag[i]    = fu_result[i].instr_fragment.vd_frag;
             wb_is_last[i] = fu_result[i].instr_fragment.is_last;
+            wb_done[i]    = fu_result[i].instr_fragment.vd_frag_done;
         end
     end
 
@@ -484,13 +529,14 @@ module vpu_dispatch
         // Accumulate frag_done_mask from FU results
         // immediately unblocks a waiting instruction next cycle.
         for (int i = 0; i < MAX_INFLIGHT; i++) begin
-            if (wb_valid[i]) begin
-                slot_d[i].frag_done_mask[wb_frag[i]] = 1'b1;
-                // Free slot when last fragment acknowledged
-                if (wb_is_last[i])
-                // if (wb_frag[i] == slot_q[i].total_frags - 1)    // TODO: wb_is_last or wb_frag?
-                    slot_d[i].valid = 1'b0;
-            end
+            
+            // Free slot when last fragment acknowledged
+            if (wb_valid[i] && wb_done[i])
+               slot_d[i].frag_done_mask[wb_frag[i]] = 1'b1;
+
+            if (wb_valid[i] && wb_is_last[i])
+                slot_d[i].valid = 1'b0;
+            
                 // $display("%0t: wb_valid=%0b wb_frag=%0d mask(before)=%b mask(after)=%b, total_frags_q=%0d",
                 //     $time,
                 //     wb_valid[i],
@@ -510,9 +556,11 @@ module vpu_dispatch
         // Allocate new slot on dispatch 
         if (dispatch_fire) begin
             logic [3:0] lv;
-            sew_e vsew;
-            lv   = vlmul_to_val(disp_decoded_i.vtype.vlmul, disp_issue_i.instr_issue.req.instr[17:15], (disp_decoded_i.instr_enum == VMVNRR_V)); // Considers CSRs?
-            vsew = disp_decoded_i.vtype.vsew;
+            sew_e veew;
+            // lv   = vlmul_to_val(disp_decoded_i.vtype.vlmul, disp_issue_i.instr_issue.req.instr[17:15], (disp_decoded_i.instr_enum == VMVNRR_V)); // Considers CSRs?
+            // vsew = disp_decoded_i.vtype.vsew;
+            lv   = vlmul_to_val(disp_decoded_i.emul, disp_issue_i.instr_issue.req.instr[17:15], (disp_decoded_i.instr_enum == VMVNRR_V)); // Considers CSRs?
+            veew = disp_decoded_i.eew;
 
             slot_d[new_fu_id].valid          = 1'b1;
             // slot_d[new_fu_id].vd_base        = disp_decoded_i.vd;
@@ -520,9 +568,9 @@ module vpu_dispatch
             slot_d[new_fu_id].vs1_base       = disp_decoded_i.vs1;
             slot_d[new_fu_id].vs2_base       = disp_decoded_i.vs2;
             slot_d[new_fu_id].rs1_base       = disp_decoded_i.rs1_data;
-            slot_d[new_fu_id].lmul_val       = lv;
+            slot_d[new_fu_id].emul_val       = lv;
             slot_d[new_fu_id].total_frags    = calc_total_frags(
-                                                   disp_decoded_i.vl, vsew, lv, disp_decoded_i.instr_enum, disp_decoded_i.vtype.vta);
+                                                   disp_decoded_i.vl, veew, lv, disp_decoded_i.instr_enum, disp_decoded_i.vtype.vta);
             slot_d[new_fu_id].uses_vs1       = disp_decoded_i.uses_vs1;
             slot_d[new_fu_id].uses_vs2       = disp_decoded_i.uses_vs2;
             slot_d[new_fu_id].uses_vd_src    = disp_decoded_i.uses_vd_src;

@@ -111,7 +111,7 @@ module tb_vpu_top_vmvnr;
         bit  vs2_ok   = nr_ok && (c.vs2 % c.nr == 0);
         bit  legal    = nr_ok && c.vm && vd_ok && vs2_ok;
         int  vlmax    = vtb_vlmax(VLEN, c.sew, c.lmul_log2);
-        int  exp_vl   = (c.avl < vlmax) ? c.avl : vlmax;
+        int  exp_vl   = vtb_expected_vl(c.avl, vlmax);
         bit  same_reg = (c.vd == c.vs2);
         bit  accepted;
         string tag, why;
