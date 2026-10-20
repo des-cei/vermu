@@ -20,7 +20,7 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
     input data_t  op_d_i,
     input logic   is_signed_i,  
     input logic   carry_i,
-	input sew_e  sew_i,
+	input sew_e   sew_i,
     output data_t result_o,
     output logic  result_valid_o 	
 ); 
@@ -45,7 +45,7 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
     end: mult_operands
 
     always_comb begin: multiply
-        is_mult = operation_valid_i && operation_i inside {OP_VMACC, OP_VNMSAC, OP_VMADD, OP_VMUL, OP_VMULH, OP_VMULHU, OP_VMULHSU};
+        is_mult = operation_valid_i && operation_i inside {OP_VMACC, OP_VNMSAC, OP_VNMSUB, OP_VMADD, OP_VMUL, OP_VMULH, OP_VMULHU, OP_VMULHSU};
         
         mult_result = '0;
         if (is_mult)
@@ -70,7 +70,8 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
                     arith_op1 = mult_result[Width-1:0];                    
                     arith_op2 = op_d_i;
                 end
-                OP_VMADD: begin
+                OP_VMADD,
+                OP_VNMSUB: begin
                     arith_op1 = mult_result[Width-1:0];
                     arith_op2 = op_s2_i;
                 end
@@ -186,8 +187,8 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
         if (operation_valid_i) begin
             result_valid_o = 1'b1;  
             unique case (operation_i)
-                OP_VADD, OP_VMACC, OP_VMADD, OP_VREDSUM   : simd_result = adder_result[Width-1:0];
-                OP_VSUB, OP_VRSUB, OP_VNMSAC              : simd_result = subtractor_result[Width-1:0];
+                OP_VADD, OP_VMACC, OP_VMADD               : simd_result = adder_result[Width-1:0];
+                OP_VSUB, OP_VRSUB, OP_VNMSAC, OP_VNMSUB   : simd_result = subtractor_result[Width-1:0];
                 OP_VMIN, OP_VMINU                         : simd_result = $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}) <= $signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) ? op_s1_i : op_s2_i;
                 OP_VMAX, OP_VMAXU                         : simd_result = $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}) > $signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) ? op_s1_i : op_s2_i;
                 OP_VAND                                   : simd_result = op_s1_i & op_s2_i;

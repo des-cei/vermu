@@ -161,7 +161,7 @@ module tb_vpu_top_vreduction;
         string       tag;
 
         all_ones = vtb_trunc('1, c.sew);
-        $display("all ones = %0h", all_ones);
+        // $display("all ones = %0h", all_ones);
 
         tag = $sformatf("%s v%0d,v%0d,v%0d SEW=%0d LMUL=%s avl=%0d vl=%0d pat=%s acc=%0h",
                         red_name(c.instr), c.vd, c.vs2, c.vs1,

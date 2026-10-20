@@ -150,7 +150,9 @@ import rvv_instr_pkg::*;
                 activate_lane.sew32 = operation_valid_i;
                 unique case(operation_i)
                     OP_VMACC,
-                    OP_VNMSAC: begin       
+                    OP_VMADD,
+                    OP_VNMSAC,
+                    OP_VNMSUB: begin       
                         op_d8b1 = op_d_i[7:0];
                         op_d8b2 = op_d_i[15:8];
                         op_d16  = 16'(op_d_i[23:16]);
@@ -169,7 +171,9 @@ import rvv_instr_pkg::*;
                 activate_lane.sew32 = operation_valid_i;
                 unique case(operation_i)
                     OP_VMACC,
-                    OP_VNMSAC: begin        
+                    OP_VMADD,
+                    OP_VNMSAC,
+                    OP_VNMSUB: begin        
                         op_d16  = op_d_i[15:0];
                         op_d32  = 32'(op_d_i[31:16]);
                     end
@@ -182,7 +186,9 @@ import rvv_instr_pkg::*;
                 activate_lane.sew32 = operation_valid_i;
                 unique case(operation_i)
                     OP_VMACC,
-                    OP_VNMSAC: begin        
+                    OP_VMADD,
+                    OP_VNMSAC,
+                    OP_VNMSUB: begin        
                         op_d32  = op_d_i;
                     end
                     default:;

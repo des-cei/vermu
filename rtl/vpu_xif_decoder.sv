@@ -883,7 +883,8 @@ import vpu_pkg::*;
                     VDIVU_VV, VDIV_VV,
                     VREMU_VV, VREM_VV,
                     VMULHU_VV, VMUL_VV, VMULHSU_VV, VMULH_VV,
-                    VMACC_VV: begin
+                    VMACC_VV, VMADD_VV,
+                    VNMSUB_VV, VNMSAC_VV: begin
                         uses_vd  = 1'b1;
                         uses_vs1 = 1'b1;
                         uses_vs2 = 1'b1;
@@ -900,9 +901,6 @@ import vpu_pkg::*;
                         emul_vs2  = vtype_i.vlmul;
                     end
                     // VMANDNOT_MM,VMAND_MM,VMOR_MM,VMXOR_MM,VMORNOT_MM,VMNAND_MM,VMNOR_MM,VMXNOR_MM 
-                    // VMADD_VV
-                    // VNMSUB_VV
-                    // VNMSAC_VV
 
                     // Widening arithmetic
                     VWADDU_VV, VWADD_VV, VWSUBU_VV, VWSUB_VV,
@@ -961,6 +959,9 @@ import vpu_pkg::*;
                     //////////////////////
                     // FMT_OPMVX_CSRRSI //
                     //////////////////////
+            
+                    VMACC_VX, VMADD_VX,
+                    VNMSUB_VX, VNMSAC_VX,
                     VAADDU_VX, VAADD_VX, VASUBU_VX, VASUB_VX,
                     VDIVU_VX, VDIV_VX,
                     VREMU_VX, VREM_VX,
@@ -972,11 +973,6 @@ import vpu_pkg::*;
                         emul_vd  = vtype_i.vlmul;
                         emul_vs2 = vtype_i.vlmul;
                     end
-
-                    // VMADD_VX,
-                    // VNMSUB_VX,
-                    // VMACC_VX,
-                    // VNMSAC_VX,
 
                     // Widening arithmetic
                     VWADDU_VX, VWADD_VX, VWSUBU_VX, VWSUB_VX,

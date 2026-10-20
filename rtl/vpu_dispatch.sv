@@ -109,10 +109,20 @@ module vpu_dispatch
 
         epf = calc_epf(veew);
 
+        max_frags = FRAGS_PER_REG * emul_val;
+        if (max_frags == '0) max_frags = 1;
+
+        // vl-agnostic instructions
+        if (vec_instr == VMVNRR_V) return FRAG_CNT_W'(max_frags);   // whole register move
+        if (vec_instr == VMV_XS)   return FRAG_CNT_W'(1);           // reads vs2[0] even with vl = 0
+
+        // vl = 0: nothing is updated (tail included, vta ignored). A single empty
+        // fragment (elements = 0) is still dispatched so the slot completes and frees.
+        if (vl == 0) return FRAG_CNT_W'(1);
+
         if (epf == '0) epf = 1;                        // TODO: not real
         tf        = (vl + epf - 1) / epf;
-        if (vl != 0 && tf == 0) tf = 1;                // Instructions with single fragment
-        if (vec_instr == VMV_SX && vl == 0) tf = 1;
+        if (tf == 0) tf = 1;                           // Instructions with single fragment
 
 
         // $display(
@@ -127,11 +137,8 @@ module vpu_dispatch
         //     VPU_N_IPU * emul_val
         // );
 
-        max_frags = FRAGS_PER_REG * emul_val;
-        if (max_frags == '0) max_frags = 1;
         if (tf > max_frags) tf = max_frags;
         if (vta) tf = max_frags;                // If vta, whole register to be processed
-        if (vec_instr == VMV_XS) tf = 1;          // Not considered LMUL > 1 
 
         // $display(
         //     "tf=%0d limit=%0d clamp=%0b",

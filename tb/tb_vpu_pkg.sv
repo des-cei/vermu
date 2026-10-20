@@ -51,6 +51,18 @@ package tb_vpu_pkg;
     localparam logic [5:0] F6_VREDMAXU = 6'b000110;
     localparam logic [5:0] F6_VREDMAX  = 6'b000111;
 
+    // OP-V funct6, single-width integer multiply-add (OPMVV / OPMVX group)
+    localparam logic [5:0] F6_VMADD    = 6'b101001;
+    localparam logic [5:0] F6_VNMSUB   = 6'b101011;
+    localparam logic [5:0] F6_VMACC    = 6'b101101;
+    localparam logic [5:0] F6_VNMSAC   = 6'b101111;
+
+    // OP-V funct6, single-width integer multiply (OPMVV / OPMVX group)
+    localparam logic [5:0] F6_VMULHU   = 6'b100100;
+    localparam logic [5:0] F6_VMUL     = 6'b100101;
+    localparam logic [5:0] F6_VMULHSU  = 6'b100110;
+    localparam logic [5:0] F6_VMULH    = 6'b100111;
+
     // One load/store test point
     typedef struct {
         int sew;        // SEW  programmed with vsetvli (bits)
@@ -184,6 +196,62 @@ package tb_vpu_pkg;
             rvv_instr_pkg::VREDMIN_VS:  return (vtb_sext(e, sew) < vtb_sext(a, sew)) ? e : a;
             rvv_instr_pkg::VREDMAX_VS:  return (vtb_sext(e, sew) > vtb_sext(a, sew)) ? e : a;
             default: $fatal(1, "vtb_red_step: instruction %s not supported", instr.name());
+        endcase
+    endfunction
+
+    // One element of a single-width integer multiply-add, result truncated to SEW.
+    //   vd_old : previous vd[i];  op1 : vs1[i] (.vv) or the SEW-truncated scalar (.vx);
+    //   vs2    : vs2[i]
+    //   vmacc  : vd = +(op1 * vs2) + vd      vnmsac : vd = -(op1 * vs2) + vd
+    //   vmadd  : vd = +(op1 * vd)  + vs2     vnmsub : vd = -(op1 * vd)  + vs2     (RVV 11.13)
+    // Only the low SEW bits of the product are kept, so signedness does not matter.
+    function automatic logic [31:0] vtb_mac_elem(input rvv_instr_pkg::vec_instr_e instr,
+                                                 input logic [31:0] vd_old,
+                                                 input logic [31:0] op1,
+                                                 input logic [31:0] vs2,
+                                                 input int sew);
+        logic [31:0] d = vtb_trunc(vd_old, sew);
+        logic [31:0] a = vtb_trunc(op1, sew);
+        logic [31:0] b = vtb_trunc(vs2, sew);
+        case (instr)
+            rvv_instr_pkg::VMACC_VV,  rvv_instr_pkg::VMACC_VX:  return vtb_trunc( (a * b) + d, sew);
+            rvv_instr_pkg::VNMSAC_VV, rvv_instr_pkg::VNMSAC_VX: return vtb_trunc(-(a * b) + d, sew);
+            rvv_instr_pkg::VMADD_VV,  rvv_instr_pkg::VMADD_VX:  return vtb_trunc( (a * d) + b, sew);
+            rvv_instr_pkg::VNMSUB_VV, rvv_instr_pkg::VNMSUB_VX: return vtb_trunc(-(a * d) + b, sew);
+            default: $fatal(1, "vtb_mac_elem: instruction %s not supported", instr.name());
+        endcase
+    endfunction
+
+    // One element of a single-width integer multiply (RVV 11.10), SEW bits.
+    //   op1 : vs1[i] (.vv) or the SEW-truncated scalar (.vx);  vs2 : vs2[i]
+    //   vmul    : low  SEW bits of  vs2 * op1
+    //   vmulh   : high SEW bits of  signed(vs2)   * signed(op1)
+    //   vmulhu  : high SEW bits of  unsigned(vs2) * unsigned(op1)
+    //   vmulhsu : high SEW bits of  signed(vs2)   * unsigned(op1)
+    // The 2*SEW-bit product needs a 64-bit intermediate for SEW = 32 (elements stay 32-bit).
+    function automatic logic [31:0] vtb_mul_elem(input rvv_instr_pkg::vec_instr_e instr,
+                                                 input logic [31:0] op1,
+                                                 input logic [31:0] vs2,
+                                                 input int sew);
+        logic [31:0]        a   = vtb_trunc(op1, sew);
+        logic [31:0]        b   = vtb_trunc(vs2, sew);
+        logic signed [63:0] sa  = vtb_sext(a, sew);        // sign-extended to 64 bits
+        logic signed [63:0] sb  = vtb_sext(b, sew);
+        logic signed [63:0] ua  = {32'd0, a};              // zero-extended, still positive
+        logic        [63:0] up  = {32'd0, a} * {32'd0, b};
+        logic signed [63:0] sp;
+        case (instr)
+            rvv_instr_pkg::VMUL_VV,    rvv_instr_pkg::VMUL_VX:    return vtb_trunc(a * b, sew);
+            rvv_instr_pkg::VMULHU_VV,  rvv_instr_pkg::VMULHU_VX:  return vtb_trunc(32'(up >> sew), sew);
+            rvv_instr_pkg::VMULH_VV,   rvv_instr_pkg::VMULH_VX:   begin
+                sp = sb * sa;
+                return vtb_trunc(32'(sp >>> sew), sew);
+            end
+            rvv_instr_pkg::VMULHSU_VV, rvv_instr_pkg::VMULHSU_VX: begin
+                sp = sb * ua;
+                return vtb_trunc(32'(sp >>> sew), sew);
+            end
+            default: $fatal(1, "vtb_mul_elem: instruction %s not supported", instr.name());
         endcase
     endfunction
  
@@ -400,6 +468,58 @@ package tb_vpu_pkg;
             default: $fatal(1, "vtb_enc_red: instruction %s not supported", instr.name());
         endcase
         return vtb_opv(f6, vm, vs2, vs1, FMT_OPMVV_CSRRS, vd);
+    endfunction
+
+    // vmacc / vnmsac / vmadd / vnmsub  .vv (OPMVV) and .vx (OPMVX)
+    //   assembly: vmacc.vv vd, vs1, vs2  /  vmacc.vx vd, rs1, vs2
+    //   'op1' is vs1 or rs1 according to the _VV/_VX suffix
+    function automatic logic [31:0] vtb_enc_mac(
+        input rvv_instr_pkg::vec_instr_e instr,
+        input logic [4:0] vd,
+        input logic [4:0] vs2,
+        input logic [4:0] op1,
+        input logic       vm = 1'b1
+    );
+        logic [5:0]  f6;
+        vec_funct3_e f3;
+        case (instr)
+            rvv_instr_pkg::VMACC_VV:  begin f6 = F6_VMACC;  f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VMACC_VX:  begin f6 = F6_VMACC;  f3 = FMT_OPMVX_CSRRSI; end
+            rvv_instr_pkg::VNMSAC_VV: begin f6 = F6_VNMSAC; f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VNMSAC_VX: begin f6 = F6_VNMSAC; f3 = FMT_OPMVX_CSRRSI; end
+            rvv_instr_pkg::VMADD_VV:  begin f6 = F6_VMADD;  f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VMADD_VX:  begin f6 = F6_VMADD;  f3 = FMT_OPMVX_CSRRSI; end
+            rvv_instr_pkg::VNMSUB_VV: begin f6 = F6_VNMSUB; f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VNMSUB_VX: begin f6 = F6_VNMSUB; f3 = FMT_OPMVX_CSRRSI; end
+            default: $fatal(1, "vtb_enc_mac: instruction %s not supported", instr.name());
+        endcase
+        return vtb_opv(f6, vm, vs2, op1, f3, vd);
+    endfunction
+
+    // vmul / vmulh / vmulhu / vmulhsu  .vv (OPMVV) and .vx (OPMVX)
+    //   assembly: vmul.vv vd, vs2, vs1  /  vmul.vx vd, vs2, rs1
+    //   'op1' is vs1 or rs1 according to the _VV/_VX suffix
+    function automatic logic [31:0] vtb_enc_mul(
+        input rvv_instr_pkg::vec_instr_e instr,
+        input logic [4:0] vd,
+        input logic [4:0] vs2,
+        input logic [4:0] op1,
+        input logic       vm = 1'b1
+    );
+        logic [5:0]  f6;
+        vec_funct3_e f3;
+        case (instr)
+            rvv_instr_pkg::VMUL_VV:    begin f6 = F6_VMUL;    f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VMUL_VX:    begin f6 = F6_VMUL;    f3 = FMT_OPMVX_CSRRSI; end
+            rvv_instr_pkg::VMULH_VV:   begin f6 = F6_VMULH;   f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VMULH_VX:   begin f6 = F6_VMULH;   f3 = FMT_OPMVX_CSRRSI; end
+            rvv_instr_pkg::VMULHU_VV:  begin f6 = F6_VMULHU;  f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VMULHU_VX:  begin f6 = F6_VMULHU;  f3 = FMT_OPMVX_CSRRSI; end
+            rvv_instr_pkg::VMULHSU_VV: begin f6 = F6_VMULHSU; f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VMULHSU_VX: begin f6 = F6_VMULHSU; f3 = FMT_OPMVX_CSRRSI; end
+            default: $fatal(1, "vtb_enc_mul: instruction %s not supported", instr.name());
+        endcase
+        return vtb_opv(f6, vm, vs2, op1, f3, vd);
     endfunction
 
     // vmv.x.s rd, vs2   (OPMVV, funct6=VWXUNARY0, vs1=0)  : x[rd] = sext(vs2[0])

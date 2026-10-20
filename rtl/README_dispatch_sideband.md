@@ -31,9 +31,37 @@ holds `EMUL` registers.
 ### Reductions
 
 `calc_view()` ([vpu_dispatch.sv](vpu_dispatch.sv)) overrides the default lockstep view:
-`vs1` and `vd` stay on the base register, row 0 (they are scalars, EMUL=1). `vd` holds a
-partial sum until the end, so `vd_frag` is fixed at 0 and `vd_frag_done` is only asserted
-on the last step. `vs2` walks the group normally.
+`vs1` and `vd` stay on the base register, row 0 (they are scalars, EMUL=1). `vd[0]` is
+only final after the last step, so `vd_frag` is fixed at 0 and `vd_frag_done` is only
+asserted on the last step. `vs2` walks the group normally.
+
+**Partial sum lives in the VSLD, not in `vd`.** The VSLD keeps the running sum in `acc_q`
+(updated when the step is accepted: `instr_valid && recv_result_ready`). Step 0 starts
+from `vs1[0]`, and later steps start from `acc_q`. `vd` is therefore never read back
+between steps.
+
+**Why:** a step can write only one row of `vd`. If `vd` row 0 held the partial sum, every
+step would have to write row 0, leaving no cycle to write the tail rows 1..`FRAGS_PER_REG-1`
+when `vta = 1`. (Bug seen: SEW=8, DW=64, VLEN=128, vl=9. Step 1 wrote its sum to row 1,
+where it was treated as tail and replaced with FF, so `vd[0]` kept the step-0 partial sum.)
+
+**Writeback schedule** (VSLD rewrites the result sideband, see below):
+
+| Step | `row_vd` | `elements` | Effect |
+|---|---|---|---|
+| `k < FRAGS_PER_REG-1`, not last | `k+1` | 0 | Tail row only: all FF (vta=1) or undisturbed (vta=0) |
+| last | 0 | 1 | `vd[0]` = sum; bytes 1..`epf-1` of row 0 are tail |
+| any other step | 0 | 0 | Rewrites row 0's tail; `vd[0]` is not in the step, so it is kept |
+
+`elem_base` is rewritten to `row_vd * epf(sew)`, which puts it in `vd` element space so
+`merge_write_data` computes the right `row_g0`. `vl_eff = 1` makes every element after
+`vd[0]` tail.
+
+Every row is covered: with `vta = 1`, `calc_total_frags` gives
+`tf = FRAGS_PER_REG * emul_val >= FRAGS_PER_REG`, so steps 0..`FRAGS_PER_REG-2` write
+rows 1..`FRAGS_PER_REG-1` and the last step (index ≥ `FRAGS_PER_REG-1`) writes row 0.
+With `vta = 0` the tail writes are no-ops. `vl = 0` is blocked by `rf_we` in the register
+file.
 
 ## Issue interface (`wrapper_exe_instr_issue.instr_fragment`)
 
@@ -49,7 +77,7 @@ Driven by the dispatcher, consumed by:
   - `elements` sets how many beats are issued.
 - **VSLD / reductions** ([vpu_sldu.sv](vpu_sldu.sv))
   - `next_frag == 0` selects the initial accumulator: `vs1[0]` on the first step, the
-    partial sum in `vd` afterwards.
+    internal `acc_q` afterwards (`op_d_i` is not used).
   - Also uses `is_last` and `elements`.
 - **Dispatcher — hazard check** (before issue)
   - Builds the same view (`vsX`, `row_vsX`) for the candidate fragment.
@@ -59,9 +87,10 @@ Driven by the dispatcher, consumed by:
 
 ## Result interface (`exe_wrapper_result.instr_fragment`)
 
-All three FUs currently forward the issue sideband unchanged
-([vpu_simd_controller.sv](vpu_simd_controller.sv), [obi_lsu_top.sv](obi_lsu_top.sv),
-[vpu_sldu.sv](vpu_sldu.sv)). Consumed by:
+VALU and VLSU forward the issue sideband unchanged
+([vpu_simd_controller.sv](vpu_simd_controller.sv), [obi_lsu_top.sv](obi_lsu_top.sv)).
+VSLD ([vpu_sldu.sv](vpu_sldu.sv)) forwards it too, except that for reductions it rewrites
+`row_vd`, `elements` and `elem_base` (see [Reductions](#reductions)). Consumed by:
 
 - **Register file — writeback** ([vpu_vregfile.sv](vpu_vregfile.sv), `write_data` /
   `merge_write_data`)

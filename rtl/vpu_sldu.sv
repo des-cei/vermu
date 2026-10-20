@@ -45,6 +45,10 @@ module vpu_sldu
     dw_t         op_s1;
     logic [31:0] scalar_val, result_data;
 
+    // Reduction accumulator
+    logic [31:0] acc_q;
+    logic        red_fire;
+
     always_comb begin : op1_assignation
         op_s1 = '0;
         scalar_val = '0;
@@ -149,32 +153,42 @@ module vpu_sldu
                     result_o = op_s2_i;
                     result_valid = 1'b1;
                 end
-                VREDSUM_VS: begin       // TODO: assign masked reduction
+                VREDSUM_VS: begin       
                     // # vd[0] = sum( vs1[0] , vs2[*] )
                     unique case (sew)
                         SEW_8: begin
-                            acc[7:0] = (next_frag == 0) ? op_s1[7:0] : op_d_i[7:0];
+                            acc[7:0] = (next_frag == 0) ? op_s1[7:0] : acc_q[7:0];
                             for (int e = 0; e < DW/8; e++)
                                 if (e < iter_vl) acc[7:0] += op_s2_i[e*8 +: 8];
                         end
                         SEW_16: begin
-                            acc[15:0] = (next_frag == 0) ? op_s1[15:0] : op_d_i[15:0];
+                            acc[15:0] = (next_frag == 0) ? op_s1[15:0] : acc_q[15:0];
                             for (int e = 0; e < DW/16; e++)
                                 if (e < iter_vl) acc[15:0] += op_s2_i[e*16 +: 16];
                         end
                         SEW_32: begin
-                            acc = (next_frag == 0) ? op_s1[31:0] : op_d_i[31:0];
+                            acc = (next_frag == 0) ? op_s1[31:0] : acc_q[31:0];
                             for (int e = 0; e < DW/32; e++)
                                 if (e < iter_vl) acc += op_s2_i[e*32 +: 32];
                         end
                         default: ;
                     endcase
                     result_o[31:0] = acc;   // only element 0 (SEW bits) is meaningful; rest is 0
+
                     result_valid   = 1'b1;
                 end
                 default: ;
             endcase 
         end
+    end
+
+
+    // Count a step only when the result is accepted, so a stalled step isn't added twice
+    assign red_fire = req_valid && is_reduction && if_exe_wrapper.wrapper_exe_recv_result_ready;
+    
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni)       acc_q <= '0;
+        else if (red_fire) acc_q <= acc;
     end
 
     dispatch_sideband_t res_frag;
@@ -189,16 +203,31 @@ module vpu_sldu
 
     assign if_exe_wrapper.exe_wrapper_result.instr_decoded           = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded;
 
+    // always_comb begin
+    //     res_frag = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
+    //     if (is_reduction) begin
+    //         res_frag.row_vd = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.row_vs2; // Writing result requires normal idx increment  
+    //     end
+    // end
+
+    // assign if_exe_wrapper.exe_wrapper_result.instr_fragment = res_frag;
+    // // assign if_exe_wrapper.exe_wrapper_result.instr_fragment = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
+
     always_comb begin
         res_frag = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
         if (is_reduction) begin
-            // res_frag.elements  = vl_t'(1);   // only vd[0] is body
-            // res_frag.elem_base = '0;
-            res_frag.row_vd = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.row_vs2; // Writing result requires normal idx increment  
+            if (!is_last && (next_frag + 1 < FRAGS_PER_REG)) begin
+                res_frag.row_vd   = ROW_W'(next_frag + 1);   // pure tail row
+                res_frag.elements = '0;
+            end else begin
+                res_frag.row_vd   = '0;                      // row holding vd[0]
+                res_frag.elements = is_last ? vl_t'(1) : '0; // vd[0] is written only on the last step
+            end
+            // elem_base in vd element space, so merge_write_data's row_g0 is correct
+            res_frag.elem_base = vl_t'(res_frag.row_vd) * vl_t'(DW / get_eew_bits(sew));
         end
     end
 
     assign if_exe_wrapper.exe_wrapper_result.instr_fragment = res_frag;
-    // assign if_exe_wrapper.exe_wrapper_result.instr_fragment = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
 
 endmodule

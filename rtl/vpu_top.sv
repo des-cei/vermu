@@ -149,8 +149,6 @@ import vpu_pkg::*;
         .op_s1_i          (vrf_rdata1[FU_VALU]),
         .op_s2_i          (vrf_rdata2[FU_VALU]),
         .op_d_i           (vrf_vd_data[FU_VALU]), 
-        .is_signed_i      ('0), // TODO  
-        .carry_i          ('0), // TODO   
         .result_o         (simd_result),  
         .if_exe_wrapper   (xif_exe_valu_i.exe_unit)
     );

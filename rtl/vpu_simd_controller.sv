@@ -12,8 +12,6 @@ module simd_controller
     input  dw_t  op_s1_i,
     input  dw_t  op_s2_i,
     input  dw_t  op_d_i,
-    input  logic is_signed_i, // TODO : ? 
-    input  logic carry_i,     // TODO : ?  
     output dw_t result_o,
     if_xif_exe.exe_unit if_exe_wrapper
 );
@@ -21,12 +19,28 @@ module simd_controller
     op_e operation; 
     vl_t  iter_vl;
     sew_e sew;
-
+    logic is_signed; 
+    logic carry;     // TODO : ?  
+    
     assign operation = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.operation;
     assign iter_vl = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
     // assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vtype.vsew;
     assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.eew;
 
+    always_comb begin
+        unique case (operation)
+            OP_VMIN,
+            OP_VMAX,
+            OP_VMSLT,
+            OP_VMUL,
+            OP_VMULH,
+            OP_VMULHSU: is_signed = '1;
+            default: is_signed = '0;
+        endcase
+    end
+
+    assign carry = '0; 
+    
     dw_t         op_s1;
     logic [31:0] scalar_val;
 
@@ -78,8 +92,8 @@ module simd_controller
                 .op_s1_i          (lane_op_s1[i]), 
                 .op_s2_i          (lane_op_s2[i]),
                 .op_d_i           (lane_d[i]),
-                .is_signed_i      (is_signed_i),
-                .carry_i          (carry_i),
+                .is_signed_i      (is_signed),
+                .carry_i          (carry),
                 .sew_i            (sew),
                 .result_o         (lane_result[i]),
                 .result_valid_o   (lane_result_valid[i])
@@ -117,29 +131,16 @@ module simd_controller
                         lane_op_s1[lane_idx][lane_offset +: 8] = op_s1[bit_index +: 8];
                         lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_i[bit_index +: 8];
                         lane_d    [lane_idx][lane_offset +: 8] = op_d_i[bit_index +: 8]; 
-                        if(operation == OP_VREDSUM) begin
-                            lane_op_s1[lane_idx][lane_offset +: 8] = 0;
-                            lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_i[bit_index +: 8];
-                        end
                     end
                     SEW_16: begin
                         lane_op_s1[lane_idx][lane_offset +: 16] = op_s1[bit_index +: 16];
                         lane_op_s2[lane_idx][lane_offset +: 16] = op_s2_i[bit_index +: 16];
                         lane_d    [lane_idx][lane_offset +: 16] = op_d_i[bit_index +: 16];
-                        if(operation == OP_VREDSUM) begin
-                            lane_op_s1[lane_idx][lane_offset +: 16] = 0;
-                            lane_op_s2[lane_idx][lane_offset +: 16] = op_s2_i[bit_index +: 16];
-                        end
                     end
                     SEW_32: begin
                         lane_op_s1[lane_idx][lane_offset +: 32] = op_s1[bit_index +: 32];
                         lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_i[bit_index +: 32];
                         lane_d    [lane_idx][lane_offset +: 32] = op_d_i[bit_index +: 32];
-                        if(operation == OP_VREDSUM) begin
-                            lane_op_s1[lane_idx][lane_offset +: 32] = 0;
-                            lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_i[bit_index +: 32];
-                        end
-
                     end
                 endcase
             end
@@ -183,35 +184,6 @@ module simd_controller
                     end
                 endcase
             end
-            OP_VREDSUM:
-                unique case (sew)
-                    SEW_8: begin
-                        for (int i = 0; i < NUM_LANES; i++) begin
-                            for (int e = 0; e < 4; e++) begin
-                                red_acc.e8 = red_acc.e8 + lane_result[i][e*8 +: 8];
-                            end
-                        end
-                        result_o[0 +: 8] = op_s1[0 +: 8] + red_acc.e8;
-                    end
-                    SEW_16: begin
-                        for (int i = 0; i < NUM_LANES; i++) begin
-                            for (int e = 0; e < 2; e++) begin
-                                red_acc.e16 += lane_result[i][e*16 +: 16];
-                            end
-                        end
-
-                        result_o[0 +: 16] = op_s1[0 +: 16]  + red_acc.e16[0 +: 16]; 
-                    end 
-                    default: begin
-                        for (int i = 0; i < NUM_LANES; i++) begin
-                            red_acc.e32 += lane_result[i]; 
-                        end
-
-                        result_o[0 +: 32] = op_s1[0 +: 32] + red_acc.e32;
-
-                    end
-                // TODO: add other reduction operations
-                endcase
             default: begin
                 for (int i = 0; i < NUM_LANES; i++) begin
                     result_o[i*32 +: 32] = lane_result[i];  

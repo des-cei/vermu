@@ -136,6 +136,10 @@ module vpu_vregfile
 //                  req.vl, vl_eff, req.vstart, req.is_reduction, req.vm, req.vtype.vta, req.vtype.vma);
 // `endif
 
+        // vstart >= vl (e.g. vl = 0): no element is updated, tail included
+        if ((req.vstart >= req.vl) && (req.instr_enum != VMVNRR_V) && (req.instr_enum != VMV_XS))
+            return old_vd;
+
         for (int b = 0; b < DW/8; b++) begin
             g       = row_g0 + vl_t'(b / bpe);
             in_step = (g >= f.elem_base) && (g < f.elem_base + f.elements);

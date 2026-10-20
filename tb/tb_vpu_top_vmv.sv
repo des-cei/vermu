@@ -254,30 +254,30 @@ module tb_vpu_top_vmv;
                 if (a == 1) begin c.vs1 = VD_REG; run_vmv_case(c); end
 
                 // vmv.v.x : several scalar patterns (truncation / sign checks)
-                // foreach (scalars[k]) begin
-                //     c = '{instr: rvv_instr_pkg::VMV_VX,
-                //           sew      : sews[s],
-                //           lmul_log2: l,
-                //           avl      : avls[a],
-                //           vd       : VD_REG,
-                //           vs1      : 0,
-                //           scalar   : scalars[k],
-                //           simm5    : '0};
-                //     run_vmv_case(c);
-                // end
+                foreach (scalars[k]) begin
+                    c = '{instr: rvv_instr_pkg::VMV_VX,
+                          sew      : sews[s],
+                          lmul_log2: l,
+                          avl      : avls[a],
+                          vd       : VD_REG,
+                          vs1      : 0,
+                          scalar   : scalars[k],
+                          simm5    : '0};
+                    run_vmv_case(c);
+                end
 
                 // vmv.v.i : simm5 sign extension
-                // foreach (simms[k]) begin
-                //     c = '{instr: rvv_instr_pkg::VMV_VI,
-                //            sew      : sews[s],
-                //            lmul_log2: l, 
-                //            avl      : avls[a],
-                //            vd       : VD_REG,
-                //            vs1      : 0, 
-                //            scalar   : '0, 
-                //            simm5    : simms[k]};
-                //     run_vmv_case(c);
-                // end
+                foreach (simms[k]) begin
+                    c = '{instr: rvv_instr_pkg::VMV_VI,
+                           sew      : sews[s],
+                           lmul_log2: l, 
+                           avl      : avls[a],
+                           vd       : VD_REG,
+                           vs1      : 0, 
+                           scalar   : '0, 
+                           simm5    : simms[k]};
+                    run_vmv_case(c);
+                end
             end
 
             // Negative tests: register groups not aligned to LMUL
