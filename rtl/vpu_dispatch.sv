@@ -50,6 +50,7 @@ module vpu_dispatch
         logic [ROW_W-1:0]      row_vs1, row_vs2, row_vd;
         logic [FRAG_CNT_W-1:0] vd_frag;
         logic                  vd_frag_done;
+        logic                  vd_we;
     } opnd_view_t;
 
     slot_t [MAX_INFLIGHT-1:0]      slot_q, slot_d;
@@ -225,13 +226,15 @@ module vpu_dispatch
         v.row_vd  = row;    
         v.vd_frag      = s.next_frag;
         v.vd_frag_done = 1'b1;
-
+        v.vd_we        = 1'b1;
         if (s.decoded.is_reduction) begin
-            // vs1[0] and vd[0] are scalars (EMUL=1); vd holds a partial sum until the last step
+            // vd (EMUL=1) is written only while reading the first register of the vs2 group (roffset == 0),
+            // on the same row being read.
             v.vs1 = s.vs1_base;
             v.vd  = s.vd_base;
             v.row_vs1 = '0;
-            v.row_vd  = '0; 
+            v.row_vd  = (roffset == '0) ? row : '0;
+            v.vd_we   = (roffset == '0);
             v.vd_frag      = '0;
             v.vd_frag_done = last;
         end
@@ -242,10 +245,11 @@ module vpu_dispatch
     /////////////////////////////////
     // Per-slot address derivation //
     /////////////////////////////////
-
-    logic [MAX_INFLIGHT-1:0][REG_OFF_W-1:0] reg_offset;
-    logic [MAX_INFLIGHT-1:0][ROW_W-1:0]     frag_in_reg;
-    logic [MAX_INFLIGHT-1:0][XLEN-1:0]      mem_offset;     
+    
+    logic [MAX_INFLIGHT-1:0][FRAG_CNT_W-1:0] frag_idx; 
+    logic [MAX_INFLIGHT-1:0][REG_OFF_W-1:0]  reg_offset;
+    logic [MAX_INFLIGHT-1:0][ROW_W-1:0]      frag_in_reg;
+    logic [MAX_INFLIGHT-1:0][XLEN-1:0]       mem_offset;     
     
     always_comb begin
 
@@ -253,11 +257,15 @@ module vpu_dispatch
         localparam int unsigned LOG2_VREG_BYTES = $clog2(VPU_VLEN / 8);  // 4 for VLEN=128
             
         for (int i = 0; i < MAX_INFLIGHT; i++) begin
+            // Reduction instr recerses fragment order. vd tail rows are written after being read as vs2
+            frag_idx[i]    = slot_q[i].decoded.is_reduction ?
+                                FRAG_CNT_W'(slot_q[i].total_frags - 1 - slot_q[i].next_frag) :
+                                slot_q[i].next_frag;
             // Which register in LMUL group
-            reg_offset[i]  = REG_OFF_W'(slot_q[i].next_frag / FRAGS_PER_REG);
+            reg_offset[i]  = REG_OFF_W'(frag_idx[i] / FRAGS_PER_REG);
             // Which slice within register
             // frag_in_reg[i] = slot_q[i].next_frag[$clog2(FRAGS_PER_REG)-1:0];
-            frag_in_reg[i] = slot_q[i].next_frag % FRAGS_PER_REG;
+            frag_in_reg[i] = frag_idx[i] % FRAGS_PER_REG;
             // LS instructions
             mem_offset[i] = XLEN'( (slot_q[i].next_frag >> LOG2_N_IPU) << LOG2_VREG_BYTES );       
         end 
@@ -435,9 +443,10 @@ module vpu_dispatch
                 dispatch_last[i].row_vd       = view[i].row_vd;
                 dispatch_last[i].vd_frag      = view[i].vd_frag;
                 dispatch_last[i].vd_frag_done = view[i].vd_frag_done;
-                dispatch_last[i].elem_base    = vl_t'(slot_q[i].next_frag) * calc_epf(esew);   // source element space
+                dispatch_last[i].vd_we        = view[i].vd_we;
+                dispatch_last[i].elem_base    = vl_t'(frag_idx[i]) * calc_epf(esew);   // source element space
                 dispatch_last[i].elements     = calc_elements_for_frag(slot_q[i].decoded.vl, esew,
-                                                slot_q[i].decoded.instr_enum, slot_q[i].next_frag);
+                                                slot_q[i].decoded.instr_enum, frag_idx[i]);
                 // dispatch_last[i].dispatch_raddr1 = slot_q[i].rs1_base + mem_offset[i];
                 dispatch_last[i].dispatch_raddr1 = '0;
 

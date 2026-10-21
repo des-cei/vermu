@@ -21,7 +21,7 @@ module vpu_sldu
     if_xif_exe.exe_unit if_exe_wrapper
 );
     logic                  req_valid, is_last, result_valid;
-    // logic [FRAG_CNT_W-1:0] frag_idx;
+    logic [FRAG_CNT_W-1:0] elem_base;
     logic [FRAG_CNT_W-1:0] next_frag;
     vl_t                   iter_vl;
     vec_instr_e            instr;
@@ -32,8 +32,8 @@ module vpu_sldu
 
     assign req_valid    = if_exe_wrapper.wrapper_exe_instr_valid;
     assign is_last      = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.is_last; 
-    // assign frag_idx     = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.frag_idx; 
-    assign next_frag     = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.next_frag; 
+    assign elem_base    = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elem_base; 
+    assign next_frag    = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.next_frag; 
     assign iter_vl      = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
     assign instr        = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.instr_enum;
     assign vm           = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vm;
@@ -97,7 +97,7 @@ module vpu_sldu
             unique case (instr)
                 VMV_XS: begin
                     if (vm) begin
-                        if (next_frag == 0) begin
+                        if (next_frag == 0) begin   // elem_base?
                             unique case (sew)
                                 SEW_8: begin
                                     result_data = {{24{op_s2_i[7]}}, op_s2_i[7:0]};
@@ -203,31 +203,23 @@ module vpu_sldu
 
     assign if_exe_wrapper.exe_wrapper_result.instr_decoded           = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded;
 
+    assign if_exe_wrapper.exe_wrapper_result.instr_fragment = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
+
     // always_comb begin
     //     res_frag = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
     //     if (is_reduction) begin
-    //         res_frag.row_vd = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.row_vs2; // Writing result requires normal idx increment  
+    //         if (!is_last && (next_frag + 1 < FRAGS_PER_REG)) begin
+    //             res_frag.row_vd   = ROW_W'(next_frag + 1);   // pure tail row
+    //             res_frag.elements = '0;
+    //         end else begin
+    //             res_frag.row_vd   = '0;                      // row holding vd[0]
+    //             res_frag.elements = is_last ? vl_t'(1) : '0; // vd[0] is written only on the last step
+    //         end
+    //         // elem_base in vd element space, so merge_write_data's row_g0 is correct
+    //         res_frag.elem_base = vl_t'(res_frag.row_vd) * vl_t'(DW / get_eew_bits(sew));
     //     end
     // end
 
     // assign if_exe_wrapper.exe_wrapper_result.instr_fragment = res_frag;
-    // // assign if_exe_wrapper.exe_wrapper_result.instr_fragment = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
-
-    always_comb begin
-        res_frag = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment;
-        if (is_reduction) begin
-            if (!is_last && (next_frag + 1 < FRAGS_PER_REG)) begin
-                res_frag.row_vd   = ROW_W'(next_frag + 1);   // pure tail row
-                res_frag.elements = '0;
-            end else begin
-                res_frag.row_vd   = '0;                      // row holding vd[0]
-                res_frag.elements = is_last ? vl_t'(1) : '0; // vd[0] is written only on the last step
-            end
-            // elem_base in vd element space, so merge_write_data's row_g0 is correct
-            res_frag.elem_base = vl_t'(res_frag.row_vd) * vl_t'(DW / get_eew_bits(sew));
-        end
-    end
-
-    assign if_exe_wrapper.exe_wrapper_result.instr_fragment = res_frag;
 
 endmodule

@@ -192,6 +192,7 @@ package vpu_pkg;
         logic [XLEN-1:0]         dispatch_raddr1; 
         logic [FRAG_CNT_W-1:0]   vd_frag;           // global fragment index inside the vd group
         logic                    vd_frag_done;      // this write completes vd_frag (consumers may read it)
+        logic                    vd_we;              
     } dispatch_sideband_t;
 
     ///////////////////

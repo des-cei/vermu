@@ -63,6 +63,8 @@ filesets:
         - tb/tb_vpu_top_vmvnr.sv
         - tb/tb_vpu_top_vreduction.sv
         - tb/tb_vpu_top_vmul.sv
+        - tb/tb_vpu_top_varith.sv
+        - tb/tb_vpu_top_vmask.sv
         file_type: systemVerilogSource
         # include_dirs:
         #   - tb

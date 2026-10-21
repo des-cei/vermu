@@ -109,26 +109,24 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
                 unique case (sew_i)
                     vpu_pkg::SEW_32: begin
                         shift_amount = op_s1_i[4:0];
-                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i);
-                        else shift_operand = $unsigned(op_s2_i);
+                        shift_operand = op_s2_i;
                     end
                     vpu_pkg::SEW_16: begin
                         shift_amount = op_s1_i[3:0];
                         if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[15:0]);
-                        else shift_operand                     = $unsigned(op_s2_i[Width-1:0]);
+                        else shift_operand                     = $unsigned(op_s2_i[15:0]);
                     end
                     default: begin
                         shift_amount = op_s1_i[2:0];
-                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[15:0]);
-                        else shift_operand = $unsigned(op_s2_i[Width-1:0]);
+                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[7:0]);
+                        else shift_operand = $unsigned(op_s2_i[7:0]);
                     end
                 endcase
             end else if (Width == 16) begin 
                 unique case (sew_i)
                     vpu_pkg::SEW_16: begin
                         shift_amount = op_s1_i[3:0];
-                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i);
-                        else shift_operand = $unsigned(op_s2_i);
+                        shift_operand = op_s2_i[15:0];
                     end
                     default: begin
                         shift_amount = op_s1_i[2:0];
@@ -137,10 +135,8 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
                     end
                 endcase
             end else begin
-                if (op_s1_i > 'd8) shift_amount = 'd8;  
-                else shift_amount = op_s1_i[2:0];
-                if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i);
-                else shift_operand = $unsigned(op_s2_i);
+                shift_amount = op_s1_i[2:0];
+                shift_operand = op_s2_i[7:0];
             end
         end
        

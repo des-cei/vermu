@@ -168,8 +168,10 @@ module vpu_vregfile
             rdata_vd_o[fu] = '0;
             // $display("unit %0h", fu);
             if (raddr1[fu] < NRVREG) begin
-                rdata1_o[fu] = vreg[raddr1[fu]][issue_frag[fu].row_vs1] &
-                                active_elements_mask(decoded_req[fu], issue_frag[fu].row_vs1, issue_frag[fu].elements);
+                rdata1_o[fu] = vreg[raddr1[fu]][issue_frag[fu].row_vs1];
+                if (!decoded_req[fu].is_reduction)
+                    rdata1_o[fu] = vreg[raddr1[fu]][issue_frag[fu].row_vs1] &
+                                    active_elements_mask(decoded_req[fu], issue_frag[fu].row_vs1, issue_frag[fu].elements);
             end
             if (raddr2[fu] < NRVREG) begin
                 rdata2_o[fu] = vreg[raddr2[fu]][issue_frag[fu].row_vs2] &
@@ -188,14 +190,12 @@ module vpu_vregfile
             vreg <= '{default: '0};
         end else begin
             for (int fu = 0; fu < 3; fu++) begin
-                if (rf_we[fu] && !decoded_req[fu].is_store && (vd[fu] < NRVREG)) begin
+                // TODO: add && res_frag[fu].vd_we
+                if (rf_we[fu] && res_frag[fu].vd_we && !decoded_req[fu].is_store && (vd[fu] < NRVREG)) begin
                     vreg[vd[fu]][res_frag[fu].row_vd] <= merge_write_data(
                         // fu,
                         decoded_req[fu],
                         wdata_i[fu],
-                        // vreg[vd[fu]][frag_idx[fu]],
-                        // frag_idx[fu],
-                        // frag_vl[fu]
                         vreg[vd[fu]][res_frag[fu].row_vd],
                         res_frag[fu]
                     );
