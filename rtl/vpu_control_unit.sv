@@ -25,7 +25,7 @@ import vpu_pkg::*;
     parameter  type         x_register_t        = logic,
     parameter  type         x_commit_t          = logic,
     parameter  type         x_result_t          = logic,
-    localparam type         registers_t         = logic [NrRgprPorts-1:0][XLEN-1:0]
+    parameter  type         registers_t         = logic [NrRgprPorts-1:0][XLEN-1:0]
 )(
     input  logic              clk_i,
     input  logic              rst_ni,

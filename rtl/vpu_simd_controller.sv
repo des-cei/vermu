@@ -50,19 +50,29 @@ module simd_controller
         unique case(if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.fmt)
             FMT_OPIVI_CSRRC: begin
                 scalar_val = $signed(if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.imm5);
+                // unique case (sew)
+                //     SEW_8:  for (int i = 0; i < iter_vl; i++) op_s1[i*8 +: 8] = scalar_val[7:0];
+                //     SEW_16: for (int i = 0; i < iter_vl; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
+                //     default: for (int i = 0; i < iter_vl; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
+                // endcase
                 unique case (sew)
-                    SEW_8:  for (int i = 0; i < iter_vl; i++) op_s1[i*8 +: 8] = scalar_val[7:0];
-                    SEW_16: for (int i = 0; i < iter_vl; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
-                    default: for (int i = 0; i < iter_vl; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
+                    SEW_8:   for (int i = 0; i < $bits(dw_t)/8; i++) op_s1[i*8 +: 8] = scalar_val[7:0];
+                    SEW_16:  for (int i = 0; i < $bits(dw_t)/16; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
+                    default: for (int i = 0; i < $bits(dw_t)/32; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
                 endcase
             end
             FMT_OPIVX,
             FMT_OPMVX_CSRRSI: begin
                 scalar_val = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.rs1_data;
+                // unique case (sew)
+                //     SEW_8:  for (int i = 0; i < iter_vl; i++) op_s1[i*8 +: 8] = scalar_val[7:0];
+                //     SEW_16: for (int i = 0; i < iter_vl; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
+                //     default: for (int i = 0; i < iter_vl; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
+                // endcase
                 unique case (sew)
-                    SEW_8:  for (int i = 0; i < iter_vl; i++) op_s1[i*8 +: 8] = scalar_val[7:0];
-                    SEW_16: for (int i = 0; i < iter_vl; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
-                    default: for (int i = 0; i < iter_vl; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
+                    SEW_8:   for (int i = 0; i < $bits(dw_t)/8; i++) op_s1[i*8 +: 8] = scalar_val[7:0];
+                    SEW_16:  for (int i = 0; i < $bits(dw_t)/16; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
+                    default: for (int i = 0; i < $bits(dw_t)/32; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
                 endcase
             end
             default: op_s1 = op_s1_i;

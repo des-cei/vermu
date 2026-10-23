@@ -1,6 +1,6 @@
 *.txt
-rtl/execution_units.sv
 rtl/vendor/obione/
+rtl/*.md
 build/
 sw/build/
 tb/vpu_vregfile.sv
