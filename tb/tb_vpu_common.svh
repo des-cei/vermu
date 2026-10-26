@@ -1,30 +1,16 @@
-// -----------------------------------------------------------------------------
-// tb_vpu_common.svh : shared VPU testbench infrastructure (included INSIDE a module)
-//
-//   CV-X-IF model --> vpu_top --> OBI memory model
-//
-// It provides:
-//   clk_i / rst_ni, DUT, xif_model, mem          (the three blocks above)
-//   do_reset()                                   reset sequence
-//   fail() / check() / case_errors / ...         error bookkeeping
-//   configure_vtype(sew, lmul_log2, avl, exp_vl) vsetvli / vsetivli + vl check
-//   issue_instr(instr, rs1, expect_accept, ...)  issue, check accept/reject, wait result
-//   issue_instr_res(..., accepted, res)          same, also returns the x_result_t
-//   read_elem(base, idx, sew)                    element read from the memory model
-//   X_RD_VL / X_AVL / X_ADDR / X_SCALAR          scalar register indices used by tests
-// -----------------------------------------------------------------------------
+// Copyright 2026 CEIMM-UPM
+// Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
+// SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
+// Ane Corral (ane.corral@upm.es)
 
-    // Scalar registers used by the tests (the model passes the value directly)
     localparam logic [4:0] X_RD_VL   = 5'd1;
-    localparam logic [4:0] X_AVL     = 5'd10;   // AVL value for vsetvli
-    localparam logic [4:0] X_ADDR    = 5'd11;   // base address of loads/stores
-    localparam logic [4:0] X_SCALAR  = 5'd12;   // scalar operand of .vx instructions
+    localparam logic [4:0] X_AVL     = 5'd10;   
+    localparam logic [4:0] X_ADDR    = 5'd11;   
+    localparam logic [4:0] X_SCALAR  = 5'd12;   
 
-    localparam int unsigned AVL_MAX  = 16'hFFFF; // "give me VLMAX"
+    localparam int unsigned AVL_MAX  = 16'hFFFF; 
 
-    //----------------------------------------------------------------------
     // Signals
-    //----------------------------------------------------------------------
     logic clk_i;
     logic rst_ni;
 
@@ -185,9 +171,7 @@
               $sformatf("vl mismatch: got %0d, expected %0d", 32'(res.data), exp_vl));
     endtask
 
-    // Issue any instruction. Checks accept/reject against the expectation and,
-    // if accepted, waits for its result and returns it. 'rs1' is the value of the
-    // scalar operand.
+    // Issue any instruction
     task automatic issue_instr_res(input logic [31:0] instr, input logic [31:0] rs1,
                                    input bit expect_accept, input string tag,
                                    output bit accepted, output x_result_t res);
@@ -204,7 +188,6 @@
         if (accepted) xif_model.wait_for_result(id, res);
     endtask
 
-    // Same, when the result is not needed
     task automatic issue_instr(input logic [31:0] instr, input logic [31:0] rs1,
                                input bit expect_accept, input string tag,
                                output bit accepted);
@@ -215,7 +198,6 @@
     //----------------------------------------------------------------------
     // Memory helpers
     //----------------------------------------------------------------------
-    // Element 'idx' (SEW bits, little endian) starting at byte address 'base'
     function automatic logic [31:0] read_elem(input bit [31:0] base, input int idx,
                                               input int sew);
         logic [31:0] v = '0;

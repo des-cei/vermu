@@ -3,27 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
-// -----------------------------------------------------------------------------
-// tb_vpu_top_vmv : vmv.v.v / vmv.v.x / vmv.v.i
-//
-// Per test point (SEW, LMUL, AVL, operand):
-//   1. vsetvli  vl = VLMAX
-//   2. vle<SEW> vd  <- OLD pattern          (known "previous" content of vd)
-//      vle<SEW> vs1 <- SRC pattern          (vmv.v.v only)
-//   3. vsetvli  vl = min(AVL, VLMAX)
-//   4. vmv.v.*  vd, <vs1 | rs1 | simm5>
-//   5. vsetvli  vl = VLMAX ; vse<SEW> vd -> DST   (dump the WHOLE register group)
-//   6. compare DST element by element:
-//        i <  vl : vs1[i] / splat(rs1) / splat(sext(simm5))
-//        i >= vl : tail -> old value (vta=0) or old value / all ones (vta=1)
-//
-// Negative tests (LMUL > 1): vd or vs1 not aligned to the register group must be
-// REJECTED by the VPU.
-//
-// Only the load/store path is used to observe the register file, so vle/vse
-// must already work. Define VPU_VRF_BYTE in tb_vpu_top_lsu_eew.sv style if you
-// also want a white-box check.
-// -----------------------------------------------------------------------------
 `timescale 1ns/1ps
 
 `ifndef VPU_VRF_BYTE
@@ -40,26 +19,26 @@ module tb_vpu_top_vmv;
     //----------------------------------------------------------------------
     // Configuration  (match your VPU build)
     //----------------------------------------------------------------------
-    localparam int unsigned VLEN          = VPU_VLEN;   // bits
-    localparam int unsigned ELEN          = 32;         // bits
-    localparam int unsigned NUM_PORTS     = VPU_N_IPU;  // OBI master ports of vpu_top
+    localparam int unsigned VLEN          = VPU_VLEN;   
+    localparam int unsigned ELEN          = 32;         
+    localparam int unsigned NUM_PORTS     = VPU_N_IPU;  
     localparam int unsigned OBI_DATA_W    = 32;
-    localparam bit          VTA           = 1'b1;       // tail agnostic
+    localparam bit          VTA           = 1'b1;       
     localparam bit          VMA           = 1'b1;
-    localparam hartid_t     HARTID        = 1;          // as in the original testbench
+    localparam hartid_t     HARTID        = 1;          
 
-    localparam bit          CHECK_TAIL    = 1'b1;       // check elements >= vl
-    localparam bit          VERBOSE_PASS  = 1'b0;       // print a line for every passing case
+    localparam bit          CHECK_TAIL    = 1'b1;       
+    localparam bit          VERBOSE_PASS  = 1'b0;       
 
     // Stress knobs for the memory model
-    localparam int unsigned GNT_STALL_PCT = 0;     // try 30
-    localparam int unsigned RSP_LATENCY   = 1;     // try 3
-    localparam int unsigned RSP_EXTRA_MAX = 0;     // try 2
+    localparam int unsigned GNT_STALL_PCT = 0;     
+    localparam int unsigned RSP_LATENCY   = 1;     
+    localparam int unsigned RSP_EXTRA_MAX = 0;     
 
     // Memory map used by the tests
-    localparam logic [31:0] OLD_BASE  = 32'h0000_1000;   // previous content of vd
-    localparam logic [31:0] SRC_BASE  = 32'h0000_2000;   // content of vs1
-    localparam logic [31:0] DST_BASE  = 32'h0000_3000;   // dump of vd
+    localparam logic [31:0] OLD_BASE  = 32'h0000_1000;  
+    localparam logic [31:0] SRC_BASE  = 32'h0000_2000;   
+    localparam logic [31:0] DST_BASE  = 32'h0000_3000;   
     localparam logic [7:0]  SENTINEL  = 8'hAA;
 
     localparam int LMUL_LOG2_MIN = -2;   // vpu_pkg::lmul_e has no 1/8
@@ -70,17 +49,14 @@ module tb_vpu_top_vmv;
 
     `include "tb_vpu_common.svh"
     `ifdef VPU_VRF_BYTE
-        // Width of one fragment of the DUT's vreg = VPU_N_IPU * ELEN (set it to your DUT's value)
         localparam int VRF_FRAG_W = VPU_N_IPU * ELEN;
 
-        // One byte of the register file, selected in two steps
         function automatic logic [7:0] vrf_byte(input int vreg_i, input int byte_i);
             logic [VRF_FRAG_W-1:0] frag;
             frag = dut.vregfile_i.vreg[vreg_i][(byte_i * 8) / VRF_FRAG_W];
             return frag[((byte_i * 8) % VRF_FRAG_W) +: 8];
         endfunction
 
-        // Element idx (SEW bits) of the register group that starts at base_reg
         function automatic logic [31:0] vrf_elem(input int base_reg, input int idx, input int sew);
             logic [31:0] v = '0;
             for (int b = 0; b < sew / 8; b++) begin
@@ -105,9 +81,9 @@ module tb_vpu_top_vmv;
         int          lmul_log2;
         int          avl;
         int          vd;
-        int          vs1;                      // VMV_VV only
-        logic [31:0] scalar;                   // VMV_VX only : value of rs1
-        logic [4:0]  simm5;                    // VMV_VI only
+        int          vs1;                      
+        logic [31:0] scalar;                   
+        logic [4:0]  simm5;                    
     } vmv_case_t;
 
     function automatic string lmul_str(input int lmul_log2);
@@ -126,7 +102,7 @@ module tb_vpu_top_vmv;
         int exp_vl    = vtb_expected_vl(c.avl, vlmax);
         int grp_bytes = vlmax * c.sew / 8;
         bit same_reg  = is_vv && (c.vd == c.vs1);
-        logic [31:0] old_base = same_reg ? SRC_BASE : OLD_BASE;   // vd content before the vmv
+        logic [31:0] old_base = same_reg ? SRC_BASE : OLD_BASE;   
         logic [4:0]  op1;
         logic [31:0] rs1_val;
         logic [31:0] splat, all_ones;
@@ -158,7 +134,6 @@ module tb_vpu_top_vmv;
         mem.fill_incr(SRC_BASE, grp_bytes, 8'h01);    // SRC[i] = 0x01 + i
         mem.fill(DST_BASE, grp_bytes + 16, SENTINEL);
 
-        // preload vd / vs1 with known data (legal cases only)
         if (legal) begin
             configure_vtype(c.sew, c.lmul_log2, AVL_MAX, vlmax);
             if (!same_reg)
@@ -169,7 +144,6 @@ module tb_vpu_top_vmv;
                             {"preload vs1: ", tag}, accepted);
         end
 
-        //  the vmv itself, with the vl under test
         configure_vtype(c.sew, c.lmul_log2, c.avl, exp_vl);
         mem.clear_log();
         issue_instr(vtb_enc_opi(c.instr, 5'(c.vd), 5'd0, op1), rs1_val, legal, tag, accepted);
@@ -232,16 +206,14 @@ module tb_vpu_top_vmv;
         do_reset();
 
         foreach (sews[s]) for (int l = LMUL_LOG2_MIN; l <= 3; l++) begin
-            if (!vtb_vtype_legal(sews[s], l, ELEN)) continue;   // vsetvli itself would set vill
+            if (!vtb_vtype_legal(sews[s], l, ELEN)) continue;   
 
             vlmax = vtb_vlmax(VLEN, sews[s], l);
             regs  = vtb_emul_regs(vtb_lmul_x8(l));
-            avls  = '{1, vlmax / 2 + 1, vlmax};   // single element / partial / full
+            avls  = '{1, vlmax / 2 + 1, vlmax};   
 
             foreach (avls[a]) begin
                 if (avls[a] < 1) continue;
-
-                // vmv.v.v : separate groups, plus vd == vs1 once
                 c = '{instr    : rvv_instr_pkg::VMV_VV,
                       sew      : sews[s],
                       lmul_log2: l,
@@ -253,7 +225,6 @@ module tb_vpu_top_vmv;
                 run_vmv_case(c);
                 if (a == 1) begin c.vs1 = VD_REG; run_vmv_case(c); end
 
-                // vmv.v.x : several scalar patterns (truncation / sign checks)
                 foreach (scalars[k]) begin
                     c = '{instr: rvv_instr_pkg::VMV_VX,
                           sew      : sews[s],
@@ -266,7 +237,6 @@ module tb_vpu_top_vmv;
                     run_vmv_case(c);
                 end
 
-                // vmv.v.i : simm5 sign extension
                 foreach (simms[k]) begin
                     c = '{instr: rvv_instr_pkg::VMV_VI,
                            sew      : sews[s],
@@ -290,10 +260,10 @@ module tb_vpu_top_vmv;
                       vs1      : VS1_REG,
                       scalar   : '0,
                       simm5    : '0};
-                run_vmv_case(c);                                   // vd misaligned
+                run_vmv_case(c);                                   
                 c.vd  = VD_REG;
                 c.vs1 = VS1_REG + 1;
-                run_vmv_case(c);                                   // vs1 misaligned
+                run_vmv_case(c);                                   
                 c = '{instr: rvv_instr_pkg::VMV_VX,
                       sew      : sews[s],
                       lmul_log2: l,
@@ -314,7 +284,7 @@ module tb_vpu_top_vmv;
             end
         end
 
-        // ---- summary
+        // summary
         repeat (5) @(posedge clk_i);
         $display("--------------------------------------------------------------");
         $display("tb_vpu_top_vmv: %0d cases, %0d failed, %0d errors",

@@ -3,33 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
-// -----------------------------------------------------------------------------
-// tb_vpu_top_varith : single-width integer arithmetic / logic / shift / min-max (OPI*)
-//
-//   vadd.vv/vx/vi    vsub.vv/vx       vrsub.vx/vi
-//   vand.vv/vx/vi    vor.vv/vx/vi     vxor.vv/vx/vi
-//   vsll.vv/vx/vi    vsrl.vv/vx/vi    vsra.vv/vx/vi
-//   vminu.vv/vx      vmin.vv/vx       vmaxu.vv/vx      vmax.vv/vx
-//
-// Per test point (instr, SEW, LMUL, AVL, operand, register aliasing):
-//   1. vsetvli  vl = VLMAX
-//   2. vle<SEW> vd  <- OLD pattern          (tail reference)
-//      vle<SEW> vs1 <- SRC1 pattern         (.vv only, if vs1 != vd)
-//      vle<SEW> vs2 <- SRC2 pattern         (if vs2 is not vd / vs1)
-//   3. vsetvli  vl = AVL  (vtb_expected_vl)
-//   4. v<op>.v{v,x,i}  vd, vs2, <vs1 | rs1 | imm5>
-//   5. read vd back (register file peek, or vsetvli VLMAX + vse<SEW> -> DST)
-//   6. compare element by element:
-//        i <  vl : vtb_opi_elem(instr, vs1[i] | trunc(rs1) | sext(simm5), vs2[i])
-//        i >= vl : tail -> old value (vta=0) or old value / all ones (vta=1)
-//        vl = 0  : whole group must be left untouched
-//
-// Aliasing cases: vs1 == vs2, vs2 == vd, vs1 == vd (each operand reads the value
-// the register held BEFORE the instruction).
-//
-// Negative tests (LMUL > 1): vd, vs1 or vs2 not aligned to the register group must
-// be REJECTED by the VPU, with no bus traffic.
-// -----------------------------------------------------------------------------
 `timescale 1ns/1ps
 
 `ifndef VPU_VRF_BYTE
@@ -52,38 +25,36 @@ module tb_vpu_top_varith;
     localparam int unsigned OBI_DATA_W    = 32;
     localparam bit          VTA           = 1'b1;       // tail agnostic
     localparam bit          VMA           = 1'b1;
-    localparam hartid_t     HARTID        = 1;          // as in the original testbench
+    localparam hartid_t     HARTID        = 1;          
 
-    localparam bit          CHECK_TAIL    = 1'b1;       // check elements >= vl
-    localparam bit          TEST_VL0      = 1'b1;       // include vl = 0 points (vd must be untouched)
-    localparam bit          TEST_ALIAS    = 1'b1;       // include vs1/vs2/vd aliasing points
-    localparam bit          VERBOSE_PASS  = 1'b0;       // print a line for every passing case
+    localparam bit          CHECK_TAIL    = 1'b1;       
+    localparam bit          TEST_VL0      = 1'b1;        
+    localparam bit          TEST_ALIAS    = 1'b1;        
+    localparam bit          VERBOSE_PASS  = 1'b0;        
 
-    // Stress knobs for the memory model
-    localparam int unsigned GNT_STALL_PCT = 0;     // try 30
-    localparam int unsigned RSP_LATENCY   = 1;     // try 3
-    localparam int unsigned RSP_EXTRA_MAX = 0;     // try 2
+    localparam int unsigned GNT_STALL_PCT = 0;     
+    localparam int unsigned RSP_LATENCY   = 1;     
+    localparam int unsigned RSP_EXTRA_MAX = 0;     
 
     // Memory map used by the tests
-    localparam logic [31:0] OLD_BASE  = 32'h0000_1000;   // previous content of vd
-    localparam logic [31:0] SRC1_BASE = 32'h0000_2000;   // content of vs1
-    localparam logic [31:0] SRC2_BASE = 32'h0000_3000;   // content of vs2
-    localparam logic [31:0] DST_BASE  = 32'h0000_4000;   // dump of vd
+    localparam logic [31:0] OLD_BASE  = 32'h0000_1000;    
+    localparam logic [31:0] SRC1_BASE = 32'h0000_2000;    
+    localparam logic [31:0] SRC2_BASE = 32'h0000_3000;    
+    localparam logic [31:0] DST_BASE  = 32'h0000_4000;    
     localparam logic [7:0]  SENTINEL  = 8'hAA;
 
     localparam int LMUL_LOG2_MIN = -2;   // vpu_pkg::lmul_e has no 1/8
 
-    // Register groups (aligned for any LMUL up to 8)
+    // Register groups 
     localparam int VD_REG  = 8;     // v8..v15
     localparam int VS1_REG = 16;    // v16..v23
     localparam int VS2_REG = 24;    // v24..v31
 
     `include "tb_vpu_common.svh"
     `ifdef VPU_VRF_BYTE
-        // Width of one fragment of the DUT's vreg = VPU_N_IPU * ELEN (set it to your DUT's value)
+        // Width of one fragment of the DUT's  
         localparam int VRF_FRAG_W = VPU_N_IPU * ELEN;
 
-        // One byte of the register file, selected in two steps
         function automatic logic [7:0] vrf_byte(input int vreg_i, input int byte_i);
             logic [VRF_FRAG_W-1:0] frag;
             frag = dut.vregfile_i.vreg[vreg_i][(byte_i * 8) / VRF_FRAG_W];
@@ -94,7 +65,7 @@ module tb_vpu_top_varith;
         function automatic logic [31:0] vrf_elem(input int base_reg, input int idx, input int sew);
             logic [31:0] v = '0;
             for (int b = 0; b < sew / 8; b++) begin
-                int n = idx * (sew / 8) + b;                              // byte number inside the group
+                int n = idx * (sew / 8) + b;                              
                 v[8*b +: 8] = vrf_byte(base_reg + n / (VLEN / 8), n % (VLEN / 8));
             end
             return v;
@@ -106,14 +77,14 @@ module tb_vpu_top_varith;
     typedef enum {FORM_VV, FORM_VX, FORM_VI} opi_form_e;
 
     typedef struct {
-        rvv_instr_pkg::vec_instr_e instr;      // V<op>_{VV,VX,VI}
+        rvv_instr_pkg::vec_instr_e instr;      
         int          sew;
         int          lmul_log2;
         int          avl;
         int          vd;
-        int          vs1;                      // .vv only
+        int          vs1;                      
         int          vs2;
-        logic [31:0] scalar;                   // .vx : value of rs1   .vi : imm5 in [4:0]
+        logic [31:0] scalar;                   
     } varith_case_t;
 
     function automatic string lmul_str(input int lmul_log2);
@@ -121,7 +92,6 @@ module tb_vpu_top_varith;
                                 : $sformatf("1/%0d", 1 << -lmul_log2);
     endfunction
 
-    // Operand form taken from the enum suffix (_VV / _VX / _VI)
     function automatic opi_form_e form_of(input rvv_instr_pkg::vec_instr_e instr);
         string n   = instr.name();
         string sfx = n.substr(n.len() - 2, n.len() - 1);
@@ -133,7 +103,7 @@ module tb_vpu_top_varith;
         endcase
     endfunction
 
-    // VADD_VV -> "vadd.vv"
+    // VADD_VV 
     function automatic string op_name(input rvv_instr_pkg::vec_instr_e instr);
         string n = instr.name().tolower();
         for (int i = 0; i < n.len(); i++) if (n[i] == "_") n[i] = ".";
@@ -152,7 +122,7 @@ module tb_vpu_top_varith;
         int vlmax         = vtb_vlmax(VLEN, c.sew, c.lmul_log2);
         int exp_vl        = vtb_expected_vl(c.avl, vlmax);
         int grp_bytes     = vlmax * c.sew / 8;
-        // Where the value each source register holds before the instruction comes from
+
         bit vs1_is_vd = is_vv && (c.vs1 == c.vd);
         bit vs2_is_vd = (c.vs2 == c.vd);
         bit vs2_is_s1 = is_vv && !vs2_is_vd && (c.vs2 == c.vs1);
@@ -160,7 +130,7 @@ module tb_vpu_top_varith;
         logic [31:0] vs2_base = vs2_is_vd ? OLD_BASE : (vs2_is_s1 ? vs1_base : SRC2_BASE);
         logic [4:0]  op1;
         logic [31:0] rs1_val;
-        logic [31:0] scalar_elem;              // .vx / .vi operand as a SEW element
+        logic [31:0] scalar_elem;              
         logic [31:0] all_ones;
         bit          accepted;
         string       op1_str;
@@ -186,12 +156,12 @@ module tb_vpu_top_varith;
 
         //  memory setup
         mem.clear_mem();
-        mem.fill_incr(OLD_BASE,  grp_bytes, 8'h40);    // OLD[i]  = 0x40 + i
-        mem.fill_incr(SRC1_BASE, grp_bytes, 8'h81);    // SRC1[i] = 0x81 + i  (sign bit set)
-        mem.fill_incr(SRC2_BASE, grp_bytes, 8'hC7);    // SRC2[i] = 0xC7 + i  (wraps through 0)
+        mem.fill_incr(OLD_BASE,  grp_bytes, 8'h40);    
+        mem.fill_incr(SRC1_BASE, grp_bytes, 8'h81);    
+        mem.fill_incr(SRC2_BASE, grp_bytes, 8'hC7);    
         mem.fill(DST_BASE, grp_bytes + 16, SENTINEL);
 
-        // preload vd / vs1 / vs2 with known data (legal cases only)
+        // preload vd / vs1 / vs2 with known data
         if (legal) begin
             configure_vtype(c.sew, c.lmul_log2, AVL_MAX, vlmax);
             issue_instr(vtb_vle(c.sew, 5'(c.vd), X_ADDR), OLD_BASE, 1'b1,
@@ -214,16 +184,15 @@ module tb_vpu_top_varith;
             check(mem.access_log.size() == 0, {"instruction touched the bus: ", tag});
 
         `ifndef VPU_VRF_BYTE
-            // dump the whole group and compare
             configure_vtype(c.sew, c.lmul_log2, AVL_MAX, vlmax);
             issue_instr(vtb_vse(c.sew, 5'(c.vd), X_ADDR), DST_BASE, 1'b1,
                         {"dump vd: ", tag}, accepted);
         `endif
             for (int i = 0; i < vlmax; i++) begin
         `ifdef VPU_VRF_BYTE
-                logic [31:0] got = vrf_elem(c.vd, i, c.sew);          // straight from the DUT
+                logic [31:0] got = vrf_elem(c.vd, i, c.sew);          
         `else
-                logic [31:0] got = read_elem(DST_BASE, i, c.sew);      // through mem
+                logic [31:0] got = read_elem(DST_BASE, i, c.sew);     
         `endif
                 logic [31:0] old = read_elem(OLD_BASE, i, c.sew);
                 logic [31:0] a   = is_vv ? read_elem(vs1_base, i, c.sew) : scalar_elem;
@@ -235,7 +204,6 @@ module tb_vpu_top_varith;
                         fail($sformatf("%s: element %0d = %0h, expected %0h (vs2=%0h op1=%0h)",
                                        tag, i, got, exp, b, a));
                 end else if (exp_vl == 0) begin
-                    // vstart >= vl: no element is updated, tail included
                     if (got !== old)
                         fail($sformatf("%s: vl=0 but element %0d = %0h, expected untouched %0h",
                                        tag, i, got, old));
@@ -281,30 +249,26 @@ module tb_vpu_top_varith;
         rvv_instr_pkg::VAND_VI,  rvv_instr_pkg::VOR_VI,   rvv_instr_pkg::VXOR_VI,
         rvv_instr_pkg::VSLL_VI,  rvv_instr_pkg::VSRL_VI,  rvv_instr_pkg::VSRA_VI};
 
-    // 0 / 1 / -1 (identity, max shift) / big pattern (truncation, shift by low bits) /
-    // sign bit only in the low byte
+
     logic [31:0] scalars [5] = '{32'h0000_0000, 32'h0000_0001, 32'hFFFF_FFFF,
                                  32'hDEAD_BEEF, 32'h1234_5683};
-    // 0 / 1 / -1 / max positive (15) / most negative (-16)
     logic [4:0]  imms    [5] = '{5'h00, 5'h01, 5'h1F, 5'h0F, 5'h10};
 
-    // Full SEW x LMUL x AVL sweep, with aliasing and misaligned-group (reject) cases
     task automatic run_sweep();
         varith_case_t c;
         int           vlmax, regs;
         int           avls [4];
 
         foreach (sews[s]) for (int l = LMUL_LOG2_MIN; l <= 3; l++) begin
-            if (!vtb_vtype_legal(sews[s], l, ELEN)) continue;   // vsetvli itself would set vill
+            if (!vtb_vtype_legal(sews[s], l, ELEN)) continue;   
 
             vlmax = vtb_vlmax(VLEN, sews[s], l);
             regs  = vtb_emul_regs(vtb_lmul_x8(l));
-            avls  = '{0, 1, vlmax / 2 + 1, vlmax};   // empty / single element / partial / full
+            avls  = '{0, 1, vlmax / 2 + 1, vlmax};   
 
             foreach (avls[a]) begin
                 if (avls[a] == 0 && !TEST_VL0) continue;
 
-                // .vv : separate groups, plus aliasing on the partial-vl point
                 foreach (vv_instrs[k]) begin
                     c = '{instr    : vv_instrs[k],
                           sew      : sews[s],
@@ -316,13 +280,12 @@ module tb_vpu_top_varith;
                           scalar   : '0};
                     run_varith_case(c);
                     if (TEST_ALIAS && a == 2) begin
-                        c.vs2 = VS1_REG;                  run_varith_case(c);   // vs1 == vs2
-                        c.vs2 = VD_REG;                   run_varith_case(c);   // vs2 == vd
-                        c.vs2 = VS2_REG; c.vs1 = VD_REG;  run_varith_case(c);   // vs1 == vd
+                        c.vs2 = VS1_REG;                  run_varith_case(c);   
+                        c.vs2 = VD_REG;                   run_varith_case(c);   
+                        c.vs2 = VS2_REG; c.vs1 = VD_REG;  run_varith_case(c);   
                     end
                 end
 
-                // .vx : several scalar patterns (truncation / sign / identity)
                 foreach (vx_instrs[k]) begin
                     foreach (scalars[n]) begin
                         c = '{instr    : vx_instrs[k],
@@ -336,11 +299,10 @@ module tb_vpu_top_varith;
                         run_varith_case(c);
                     end
                     if (TEST_ALIAS && a == 2) begin
-                        c.vs2 = VD_REG;                   run_varith_case(c);   // vs2 == vd
+                        c.vs2 = VD_REG;                   run_varith_case(c);   
                     end
                 end
 
-                // .vi : immediate patterns (sign extension / shift amount)
                 foreach (vi_instrs[k]) begin
                     foreach (imms[n]) begin
                         c = '{instr    : vi_instrs[k],
@@ -354,12 +316,12 @@ module tb_vpu_top_varith;
                         run_varith_case(c);
                     end
                     if (TEST_ALIAS && a == 2) begin
-                        c.vs2 = VD_REG;                   run_varith_case(c);   // vs2 == vd
+                        c.vs2 = VD_REG;                   run_varith_case(c);   
                     end
                 end
             end
 
-            // Negative tests: register groups not aligned to LMUL
+            // Register groups not aligned to LMUL
             if (regs > 1) begin
                 foreach (vv_instrs[k]) begin
                     c = '{instr    : vv_instrs[k],
@@ -370,9 +332,9 @@ module tb_vpu_top_varith;
                           vs1      : VS1_REG,
                           vs2      : VS2_REG,
                           scalar   : '0};
-                    run_varith_case(c);                                        // vd misaligned
-                    c.vd  = VD_REG;  c.vs1 = VS1_REG + 1;  run_varith_case(c); // vs1 misaligned
-                    c.vs1 = VS1_REG; c.vs2 = VS2_REG + 1;  run_varith_case(c); // vs2 misaligned
+                    run_varith_case(c);                                        
+                    c.vd  = VD_REG;  c.vs1 = VS1_REG + 1;  run_varith_case(c); 
+                    c.vs1 = VS1_REG; c.vs2 = VS2_REG + 1;  run_varith_case(c); 
                 end
                 foreach (vx_instrs[k]) begin
                     c = '{instr    : vx_instrs[k],
@@ -383,8 +345,8 @@ module tb_vpu_top_varith;
                           vs1      : 0,
                           vs2      : VS2_REG,
                           scalar   : 32'h3};
-                    run_varith_case(c);                                        // vd misaligned
-                    c.vd  = VD_REG;  c.vs2 = VS2_REG + 1;  run_varith_case(c); // vs2 misaligned
+                    run_varith_case(c);                                        
+                    c.vd  = VD_REG;  c.vs2 = VS2_REG + 1;  run_varith_case(c); 
                 end
                 foreach (vi_instrs[k]) begin
                     c = '{instr    : vi_instrs[k],
@@ -395,8 +357,8 @@ module tb_vpu_top_varith;
                           vs1      : 0,
                           vs2      : VS2_REG,
                           scalar   : 32'h3};
-                    run_varith_case(c);                                        // vd misaligned
-                    c.vd  = VD_REG;  c.vs2 = VS2_REG + 1;  run_varith_case(c); // vs2 misaligned
+                    run_varith_case(c);                                        
+                    c.vd  = VD_REG;  c.vs2 = VS2_REG + 1;  run_varith_case(c); 
                 end
             end
         end
@@ -407,7 +369,7 @@ module tb_vpu_top_varith;
 
         run_sweep();
 
-        // ---- summary
+        // summary
         repeat (5) @(posedge clk_i);
         $display("--------------------------------------------------------------");
         $display("tb_vpu_top_varith: %0d cases, %0d failed, %0d errors",

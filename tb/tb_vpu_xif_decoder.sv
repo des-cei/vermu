@@ -34,8 +34,8 @@ import cvxif_types_pkg::readregflags_t;
     
     // Per-line data from the stimulus file
     logic [31:0] curr_instr;
-    logic [31:0] curr_rs1;     // not driven (no data-path in DUT) but read
-    logic [31:0] curr_rs2;     // idem
+    logic [31:0] curr_rs1;     
+    logic [31:0] curr_rs2;     
     string       curr_mnemonic;
 
     // Counters / scoreboard

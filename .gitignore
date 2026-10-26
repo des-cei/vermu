@@ -4,7 +4,9 @@ rtl/*.md
 build/
 sw/build/
 tb/vpu_vregfile.sv
+tb/tb_vpu_obi_lsu_top.sv
 tb/*.do
+tb/*.py
 !tb/wave_automatize.do
 tb/env.sh
 transcript

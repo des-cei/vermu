@@ -28,7 +28,6 @@ module tb_vpu_top_lsu;
     x_result_t    x_result;
 
     localparam logic [6:0] OPCODE_OP_V = 7'h57;
-    // localparam logic [31:0] EXPECTED_VADD_LANE0 = 32'h4444_4443;
 
     // Tail / mask policy
     localparam logic VTA = 1'b1;

@@ -115,7 +115,7 @@ module tb_vpu_dispatch;
                     result_seed++;
 
                     iface.exe_wrapper_result.instr_fragment = current_issue.instr_fragment;
-                    // TODO: necesary to add decoded?
+
                     busy = 1'b0;
                 end
             end
@@ -568,7 +568,7 @@ module tb_vpu_dispatch;
             check("Instruction 10 completed", instr_state[10].completed);
         end
 
-/*        // Scenario 6 — Kill flushes in-flight slot
+        // Scenario 6 — Kill flushes in-flight slot
         $display("\n=== Scenario 6: kill flushes VALU slot ===");
         begin
             disp_decoded = make_arith(.vd(5'd12), .vs1(5'd0), .vs2(5'd1),
@@ -653,11 +653,7 @@ module tb_vpu_dispatch;
             disp_issue   = make_issue(.id(4'd12));
             disp_valid   = 1;
             @(posedge clk); #1;
-            // dispatch_fire (queue pop) should still happen — the structural
-            // stall is inside the slot (FU not ready), not at dispatch time.
-            // NOTE: whether to pop queue on dispatch_fire or on first fragment
-            // accepted is a design choice.  Here dispatch_fire = queue pop,
-            // fragment issue happens when FU is ready.
+
             check("Sc8: queue dispatch accepted", disp_ready);
             disp_valid = 0;
 
@@ -674,7 +670,7 @@ module tb_vpu_dispatch;
 
             wait_cycles(8);
         end
-*/
+
         // Summary
         @(posedge clk); #1;
         $display("\n========================================");

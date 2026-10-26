@@ -17,11 +17,6 @@ module tb_decoder;
     logic          issue_valid, issue_ready;
     vec_instr_e    vec_instr;
 
-
-    // logic                buffer_req_valid_i;
-    // buff_dec_t           buffer_req_i;
-    // hartid_t             hartid_i, hartid_o;
-    // id_t                 id_i, id_o;
     x_issue_t     instr_req;
     logic         dec_resp_valid_o;
     vec_decoded_t decoded_req_o;
@@ -33,8 +28,8 @@ module tb_decoder;
 
     // Per-line data from the stimulus file
     logic [31:0] curr_instr;
-    logic [31:0] curr_rs1;     // not driven (no data-path in DUT) but read
-    logic [31:0] curr_rs2;     // idem
+    logic [31:0] curr_rs1;     
+    logic [31:0] curr_rs2;     
     string       curr_mnemonic;
 
     // Counters / scoreboard
@@ -66,7 +61,6 @@ module tb_decoder;
         .NrRgprPorts(X_NUM_RS),
         .id_t        (id_t),
         .hartid_t    (hartid_t),
-        // .registers_t (registers_t),
         .x_issue_t   (x_issue_t),
         .vec_instr_e (vec_instr_e)
     ) i_vpu_decoder (
@@ -76,14 +70,6 @@ module tb_decoder;
         .vec_instr_i     (vec_instr),
         .dec_resp_valid_o,
         .decoded_req_o   
-
-        // .buffer_req_valid_i (1'b1),
-        // .buffer_req_i,
-        // .hartid_i ,
-        // .id_i,
-        // .dec_resp_valid_o,
-        // .hartid_o,
-        // .id_o,
     );
 
     function automatic string decode_fields(input logic [31:0] ins);
@@ -102,11 +88,6 @@ module tb_decoder;
         opcode, funct3, funct6, rd, rs1_f, rs2_f, ins[25]
     );
     endfunction
-
-    //  NOTE: only the instructions that are *accepted* by the current decoder
-    //        are mapped. Anything not listed here is left as INSTR_ILLEGAL so
-    //        mismatches are only flagged when the decoder claims acceptance but
-    //        cannot be verified, or vice-versa.
 
     function automatic vec_instr_e mnemonic_to_enum(input string mn);
     case (mn)
@@ -614,14 +595,5 @@ module tb_decoder;
 
         $finish;
     end : stim
-
-    // assign buffer_req_valid_i                  = issue_ready;
-    // assign buffer_req_i.instr_enum             = vec_instr;
-    // assign buffer_req_i.instr                  = instr;
-    // assign buffer_req_i.registers[0]           = curr_rs1;
-    // assign buffer_req_i.registers[1]           = curr_rs2;
-    // assign buffer_req_i.x_issue_resp.writeback = x_issue_resp.writeback;
-    // assign hartid_i                            = 1'h1;
-    // assign id_i                                = 5'hD;
 
 endmodule : tb_decoder

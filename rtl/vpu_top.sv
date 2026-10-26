@@ -160,7 +160,7 @@ import vpu_pkg::*;
     ) obi_lsu_top_i (
         .clk_i             (clk_i),   
         .rst_ni            (rst_ni),
-        .data_i            (vrf_rdata1[FU_VLSU]),   // TODO: rdata1?
+        .data_i            (vrf_vd_data[FU_VLSU]),   
         .data_o            (vlsu_result),
         .if_exe_wrapper    (xif_exe_vlsu_i.exe_unit),
         .masters_resp_i    (masters_resp_i),

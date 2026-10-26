@@ -3,17 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
-// vpu_tb_pkg :
-//   * RVV instruction encoders (vsetvli/vsetivli, unit-stride/strided/indexed ld/st)
-//   * LMUL / EMUL / VLMAX arithmetic and legality rules
-//
-// Conventions (chosen so that tests read like the RVV spec):
-//   sew, eew  : element width in BITS            (8, 16, 32, 64)
-//   lmul_log2 : log2(LMUL)                       (-3..3  ==>  1/8 .. 8)
-//   *_x8      : a LMUL/EMUL value multiplied by 8 (1/8 -> 1, 1 -> 8, 8 -> 64),
-//               so fractional values stay integers.
-// -----------------------------------------------------------------------------
-
 package tb_vpu_pkg;
     import vpu_pkg::*;
 

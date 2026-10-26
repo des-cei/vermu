@@ -1,24 +1,8 @@
-// tb_vpu_vregfile.sv
-// -------------------------------------------------------------------------
-// Self-checking testbench for vpu_vregfile, using vpu_decoder to turn raw
-// (partial) RVV-style instruction words into vpu_decoded_t, and driving the
-// if_xif_exe interfaces the same way an execution wrapper would.
-//
-// Because vpu_decoder's functional case statement switches on the already
-// -resolved `vec_instr_e` enum (not on the raw funct6 bits), the raw
-// instruction word only needs to carry the fields the decoder actually
-// extracts: vm[25], vs2[24:20], vs1/rs1/imm5[19:15], fmt[14:12], vd[11:7],
-// and for loads/stores nf[31:29]/mew[28]/mop[27:26]/umop[24:20]/width[14:12].
-// funct6[31:26] is captured but not used to steer decoding, so it is left
-// as don't-care/zero here.
-//
-// The dispatch_sideband_t (dispatch_vd/vs1/vs2), which is what
-// vpu_vregfile actually uses for addressing, is modeled here the way a
-// real dispatcher would build it: straight from the raw instruction's
-// vd/vs1/vs2 bit positions, independent of vpu_decoded_t's own vd/vs1/vs2
-// fields (which the decoder deliberately leaves 0 for loads/stores, see
-// vpu_decoder.sv lines ~769-782).
-// -------------------------------------------------------------------------
+// Copyright 2026 CEIMM-UPM
+// Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
+// SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
+// Ane Corral (ane.corral@upm.es)
+
 
 `timescale 1ns/1ps
 
@@ -47,11 +31,6 @@ module tb_vpu_vregfile;
     logic [2:0][VPU_VLEN-1:0] rdata2;
     logic [2:0][VPU_VLEN-1:0] rdata_vd;
 
-    // Three separately named (non-arrayed) interface instances. Drive
-    // tasks below take `fu` and case-dispatch to the matching instance
-    // via plain interface ports (not virtual interfaces) - this avoids
-    // simulator-specific gaps around arrays/handles of virtual interfaces
-    // while still letting one task body serve all three FUs.
     if_xif_exe if_valu ();
     if_xif_exe if_vlsu ();
     if_xif_exe if_vsld ();
@@ -251,10 +230,6 @@ module tb_vpu_vregfile;
         decoded_out    = decoded[fu];
     endtask
 
-    // Drives one write into the DUT for FU `fu`, and mirrors it into the
-    // reference model. `fu` fans out to one of the three named interface
-    // instances via a case statement (kept as three plain instances,
-    // rather than an array, for maximum simulator portability).
     task automatic rf_write(
         input int           fu,
         input vpu_decoded_t decoded_req,
@@ -302,10 +277,6 @@ module tb_vpu_vregfile;
         dec_valid[fu] = 1'b0;
     endtask
 
-    // Reads back the full (unmasked) 256b content of a vector register
-    // through port 2 (vs2) of the given FU, bypassing the decoder by
-    // building a minimal decoded request directly (SEW=8, vl=VLENB,
-    // vstart=0, vm=1 => active_elements_mask covers the whole register).
     task automatic read_full(input int fu, input logic [4:0] reg_addr, output vlen_t val);
         vpu_decoded_t d;
         dispatch_sideband_t f;
@@ -394,11 +365,7 @@ module tb_vpu_vregfile;
         check_vlen(mask_data, got, "T2: unmasked full-vl write lands exactly in v1");
 
         // -----------------------------------------------------------
-        // T3: masked write, vma=0 (undisturbed) - v0 supplies the mask,
-        //     element 0 disabled must retain old value, element 1 enabled
-        //     must take new data (SEW=32 => 4-byte elements, VPU_VLEN=256
-        //     => 8 elements. v0[0]=0, v0[1]=1, rest can be 0/don't-care
-        //     with vl limited to 2 so tail policy doesn't interfere.)
+        // T3: masked write, vma=0 (undisturbed) - v0 supplies the mask.
         // -----------------------------------------------------------
         // seed v0 mask register directly (vd=0) with element0=0, element1=1
         raw = enc_vv(1'b1, 5'd0, 5'd0, 5'd0);
@@ -423,26 +390,26 @@ module tb_vpu_vregfile;
         check_vlen(exp, got, "T3: masked write, undisturbed inactive elements, new data on enabled element");
 
         // -----------------------------------------------------------
-        // T4: mask-agnostic (vma=1) - disabled element becomes all-1s
+        // T4: mask-agnostic (vma=1) 
         // -----------------------------------------------------------
         raw = enc_vv(1'b1, 5'd0, 5'd0, 5'd5);
         decode_instr(FU_VALU, VADD_VV, raw, vt_e32_ma_ta, VLENB, '0, '0, '0, d);
         f = make_frag(raw);
         rf_write(FU_VALU, d, f, {8{32'h5555_5555}});
 
-        raw = enc_vv(1'b0, 5'd2, 5'd3, 5'd5); // vm=0, masked, vma=1/vta=1
+        raw = enc_vv(1'b0, 5'd2, 5'd3, 5'd5); 
         decode_instr(FU_VALU, VADD_VV, raw, vt_e32_ma_ta, 32'd2, '0, '0, '0, d);
         f = make_frag(raw);
         rf_write(FU_VALU, d, f, {8{32'h2222_2222}});
 
         read_full(FU_VALU, 5'd5, got);
-        exp = {{6{32'hFFFF_FFFF}}, 32'h2222_2222, 32'hFFFF_FFFF}; // elem0 disabled->0xFF..., elem1 enabled->new, tail(2..7)->0xFF via vta
+        exp = {{6{32'hFFFF_FFFF}}, 32'h2222_2222, 32'hFFFF_FFFF}; 
         check_vlen(exp, got, "T4: mask-agnostic disabled element and tail-agnostic tail both go to all-ones");
 
         // -----------------------------------------------------------
         // T5: is_store must never write back
         // -----------------------------------------------------------
-        raw = enc_ls_unit_stride(1'b1, 3'b010, 5'd6, 1'b1); // VSE32_V into "v6" (vs3 field)
+        raw = enc_ls_unit_stride(1'b1, 3'b010, 5'd6, 1'b1); 
         decode_instr(FU_VLSU, VSE32_V, raw, vt_e32_ma_ta, VLENB, '0, '0, '0, d);
         f = make_frag(raw);
         rf_write(FU_VLSU, d, f, {8{32'hFEED_FACE}});
@@ -452,9 +419,9 @@ module tb_vpu_vregfile;
 
         // -----------------------------------------------------------
         // T6: narrower EEW load merge (VLE8_V into wide SEW=32 vtype
-        //     context) - bpe should come from width, not vtype.vsew
+        //     context) 
         // -----------------------------------------------------------
-        raw = enc_ls_unit_stride(1'b1, 3'b000, 5'd7, 1'b0); // VLE8_V, width=000 => 1B/elem
+        raw = enc_ls_unit_stride(1'b1, 3'b000, 5'd7, 1'b0); 
         decode_instr(FU_VLSU, VLE8_V, raw, vt_e32_ma_ta, VLENB, '0, '0, '0, d);
         f = make_frag(raw);
         rf_write(FU_VLSU, d, f, {8{32'h01234567}});
@@ -491,16 +458,12 @@ module tb_vpu_vregfile;
         check_vlen({8{32'h5EED_1234}}, got, "T7b: FU_VSLD concurrent write landed in v11");
 
         // -----------------------------------------------------------
-        // T8: out-of-range destination (>= NRVREG) must be gated off
+        // T8: out-of-range destination (>= NRVREG) 
         // -----------------------------------------------------------
-        raw = enc_vv(1'b1, 5'd0, 5'd0, 5'd1); // reuse vd=1 encoding, override frag below
+        raw = enc_vv(1'b1, 5'd0, 5'd0, 5'd1); 
         decode_instr(FU_VALU, VADD_VV, raw, vt_e32_ma_ta, VLENB, '0, '0, '0, d);
         f = make_frag(raw);
-        f.dispatch_vd = 5'd31; // still legal (NRVREG=32, so 31 is valid) -> use a truly OOB proxy instead
-        // NRVREG = 32 with a 5-bit field means no encodable address is actually
-        // out-of-range; instead verify the "vd < NRVREG" guard for reads with a
-        // legal high address, and rely on functional coverage of T1-T7 for the
-        // guard logic itself.
+        f.dispatch_vd = 5'd31; 
         rf_write(FU_VALU, d, f, {8{32'hABCD_EF01}});
         read_full(FU_VALU, 5'd31, got);
         check_vlen({8{32'hABCD_EF01}}, got, "T8: highest addressable register (v31) writes correctly");

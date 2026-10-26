@@ -140,8 +140,7 @@ module tb_vpu_obi_lsu_top;
         rst_ni = 1'b0;
 
         clear_issue();
-        // masters_resp_i = '{default: '0};
-        // foreach (memory[index]) memory[index] = '0;
+
 
         repeat (2) @(posedge clk_i);
         rst_ni = 1'b1;

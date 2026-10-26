@@ -3,28 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 // Ane Corral (ane.corral@upm.es)
 
-// -----------------------------------------------------------------------------
-// tb_vpu_top_vmv_scalar : vmv.x.s and vmv.s.x
-//
-//
-// vmv.x.s rd, vs2   x[rd] = sext(vs2[0])   (SEW < XLEN: sign-extended)
-//                   executes even if vl = 0
-//   1. vsetvli vl=VLMAX ; vle<SEW> group <- pattern (element 0 of reg r forced
-//      to a test value)
-//   2. vsetvli vl=AVL   ; vmv.x.s x5, v(base+r)
-//   3. check x_result: data, rd, we
-//
-// vmv.s.x vd, rs1   vd[0] = x[rs1]  if vl >= 1 ; vl = 0 -> NOTHING is updated
-//                   (not even tail elements). Elements > 0 are tail.
-//   1. vsetvli vl=VLMAX ; vle<SEW> group <- OLD pattern
-//   2. vsetvli vl=AVL   ; vmv.s.x v(base+r), rs1
-//   3. read back with vmv.x.s       -> new value (vl>=1) / old value (vl=0)
-//   4. vsetvli vl=VLMAX ; vse<SEW> group -> DST ; compare element by element
-//        - target element        : new value (vl>=1) / old value (vl=0)
-//        - everything else, vl=0 : old value
-//        - everything else, vl>=1: tail -> old value (vta=0) or old / all ones (vta=1)
-//
-// -----------------------------------------------------------------------------
 `timescale 1ns/1ps
 
 module tb_vpu_top_vmv_scalar;
@@ -38,32 +16,32 @@ module tb_vpu_top_vmv_scalar;
     //----------------------------------------------------------------------
     // Configuration  (match your VPU build)
     //----------------------------------------------------------------------
-    localparam int unsigned VLEN          = VPU_VLEN;   // bits
-    localparam int unsigned ELEN          = 32;         // bits
-    localparam int unsigned NUM_PORTS     = VPU_N_IPU;  // OBI master ports of vpu_top
+    localparam int unsigned VLEN          = VPU_VLEN;   
+    localparam int unsigned ELEN          = 32;         
+    localparam int unsigned NUM_PORTS     = VPU_N_IPU;  
     localparam int unsigned OBI_DATA_W    = 32;
-    localparam bit          VTA           = 1'b1;       // tail agnostic
+    localparam bit          VTA           = 1'b1;       
     localparam bit          VMA           = 1'b1;
-    localparam hartid_t     HARTID        = 1;          // as in the original testbench
+    localparam hartid_t     HARTID        = 1;         
 
-    localparam bit          CHECK_TAIL        = 1'b1;   // check elements other than the target
-    localparam bit          STRICT_OTHER_REGS = 1'b0;   // 1: registers of the group other than vd
-                                                        //    must be untouched even with vta=1
+    localparam bit          CHECK_TAIL        = 1'b1;   
+    localparam bit          STRICT_OTHER_REGS = 1'b0;   
+                                                        
     localparam bit          VERBOSE_PASS  = 1'b0;
     localparam int          LMUL_LOG2_MIN = -2;         // vpu_pkg::lmul_e has no 1/8
 
     // Stress knobs for the memory model
-    localparam int unsigned GNT_STALL_PCT = 0;     // try 30
-    localparam int unsigned RSP_LATENCY   = 1;     // try 3
-    localparam int unsigned RSP_EXTRA_MAX = 0;     // try 2
+    localparam int unsigned GNT_STALL_PCT = 0;     
+    localparam int unsigned RSP_LATENCY   = 1;     
+    localparam int unsigned RSP_EXTRA_MAX = 0;     
 
     // Memory map used by the tests
-    localparam logic [31:0] SRC_BASE  = 32'h0000_1000;   // data loaded into the group
-    localparam logic [31:0] DST_BASE  = 32'h0000_3000;   // dump of the group
+    localparam logic [31:0] SRC_BASE  = 32'h0000_1000;   
+    localparam logic [31:0] DST_BASE  = 32'h0000_3000;   
     localparam logic [7:0]  SENTINEL  = 8'hAA;
 
-    localparam int          VD_REG    = 8;         // register group v8..v15
-    localparam logic [4:0]  X_DST     = 5'd5;      // rd of vmv.x.s
+    localparam int          VD_REG    = 8;         
+    localparam logic [4:0]  X_DST     = 5'd5;      
 
     `include "tb_vpu_common.svh"
 
@@ -99,8 +77,6 @@ module tb_vpu_top_vmv_scalar;
 
     //----------------------------------------------------------------------
     // vmv.x.s
-    //   r = register of the group that is read (v(VD_REG + r)); LMUL is ignored,
-    //   so r > 0 is legal even though v(VD_REG + r) is not group aligned.
     //----------------------------------------------------------------------
     task automatic run_xs(input int sew, input int lmul_log2, input int r,
                           input logic [31:0] val, input int avl);
@@ -233,18 +209,18 @@ module tb_vpu_top_vmv_scalar;
         do_reset();
 
         foreach (sews[s]) for (int l = LMUL_LOG2_MIN; l <= 3; l++) begin
-            if (!vtb_vtype_legal(sews[s], l, ELEN)) continue;   // vsetvli itself would set vill
+            if (!vtb_vtype_legal(sews[s], l, ELEN)) continue;   
 
             vlmax = vtb_vlmax(VLEN, sews[s], l);
             regs  = vtb_emul_regs(vtb_lmul_x8(l));
-            rs    = '{0, regs - 1};                       // first and last register of the group
+            rs    = '{0, regs - 1};                       
             nr    = (regs > 1) ? 2 : 1;
-            avls  = '{0, 1, vlmax};                       // vl = 0 / one element / full
+            avls  = '{0, 1, vlmax};                       
 
             // ---- vmv.x.s : independent of vl and LMUL
-            // for (int ri = 0; ri < nr; ri++)
-            //     foreach (vals[k]) foreach (avls[a])
-            //         run_xs(sews[s], l, rs[ri], vals[k], avls[a]);
+            for (int ri = 0; ri < nr; ri++)
+                foreach (vals[k]) foreach (avls[a])
+                    run_xs(sews[s], l, rs[ri], vals[k], avls[a]);
 
             // ---- vmv.s.x : vl = 0 must not update anything
             for (int ri = 0; ri < nr; ri++)
@@ -258,7 +234,7 @@ module tb_vpu_top_vmv_scalar;
             end
         end
 
-        // ---- summary
+        // summary
         repeat (5) @(posedge clk_i);
         $display("--------------------------------------------------------------");
         $display("tb_vpu_top_vmv_scalar: %0d cases, %0d failed, %0d errors",
