@@ -5,15 +5,15 @@
 ########################################
 PYTHON ?= python3
 PROJECT ?= vpu_compiler
-CORE_NAME ?= ceiupm::vpu_upm
+CORE_NAME ?= ceimmupm:accelerators:vermu
 FUSESOC_TARGET ?= default
 BUILD_DIR ?= build
 VPU_N_IPU ?= 1
 VPU_VLEN ?= 128
 VPU_PKG_TEMPLATE ?= rtl/include/vpu_pkg.sv.tpl
 VPU_PKG_GENERATED ?= $(BUILD_DIR)/generated/vpu_pkg.sv
-# SIM_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name '*vpu_upm*' 2>/dev/null | sort -V | head -n 1)/sim-modelsim
-SIM_BASE_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name '*vpu_upm*' 2>/dev/null | sort -V | head -n 1)
+# SIM_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name '*vermu*' 2>/dev/null | sort -V | head -n 1)/sim-modelsim
+SIM_BASE_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name '*vermu*' 2>/dev/null | sort -V | head -n 1)
 SIM_DIR ?= $(or $(wildcard $(SIM_BASE_DIR)/$(FUSESOC_TARGET)-modelsim),$(wildcard $(SIM_BASE_DIR)/sim-modelsim),$(firstword $(wildcard $(SIM_BASE_DIR)/*-modelsim)))
 STIM ?= sw/build/stimulus.txt
 ASM ?= sw/build/main.S

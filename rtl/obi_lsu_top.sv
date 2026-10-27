@@ -31,8 +31,8 @@ import vpu_pkg::*;
     logic lsu_ready;
     logic start;
     logic accept;
-    logic dma_active_q;     // TODO : what?
-    logic pending_q;        // TODO :element pending to operate
+    logic dma_active_q;     
+    logic pending_q;        
     logic rw_q;
 
 
@@ -81,11 +81,11 @@ import vpu_pkg::*;
         integer done_i;
         all_done = 1'b1;
         for (done_i = 0; done_i < PORTS; done_i++) begin
-            all_done &= complete_q[done_i];                // TODO: can be reduce clk all_done = done_vec -> No! in case some port finishes earlier
+            all_done &= complete_q[done_i];                
         end
     end
 
-    assign transfer_done = dma_active_q && all_done;    // ? No es lo mismo que all done?
+    assign transfer_done = dma_active_q && all_done;    
     assign data_o = transfer_done ? load_result_q : 0;
 
     // DMA request configuration . EEW

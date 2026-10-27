@@ -18,31 +18,17 @@ import rvv_instr_pkg::*;
     parameter  int unsigned      XLEN                        = 32,
     parameter type               hartid_t                    = logic,
     parameter type               id_t                        = logic,
-    // parameter type               x_issue_req_t               = logic,
-    // parameter type               x_issue_resp_t              = logic,
-    // parameter type               x_register_t                = logic,
-    // parameter type               registers_t                 = logic [NrRgprPorts-1:0][XLEN-1:0],
     parameter type               vpu_issue_t                   = logic
-    // parameter type               vec_instr_e                 = logic
 )(
     input  logic                clk_i,
     input  logic                req_valid_i,  
     input  vpu_issue_t          instr_req_i,
-    // input  vec_instr_e          vec_instr_i,
-
-    // input  logic                buffer_req_valid_i,     
-    // input  buff_dec_t           buffer_req_i,
-    // input  hartid_t             hartid_i,
-    // input  id_t                 id_i,
     input vtype_t               vtype_i,
     input vl_t                  vl_i,
     input vl_t                  vstart_i,
     output logic                dec_resp_valid_o,
-    // output hartid_t             hartid_o,
-    // output id_t                 id_o,
     output vpu_decoded_t        decoded_req_o,
     output logic [XLEN-1:0]     avl_o
-    // Todo: register_read
 );
 
     logic unused_illegal;   // get_emul() illegal flag, not used by the decoder
