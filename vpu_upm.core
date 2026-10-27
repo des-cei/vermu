@@ -1,6 +1,6 @@
 CAPI=2:
 
-name: "ceiupm::vpu_upm"
+name: "ceimmupm:accelerators:vermu"
 description: "Vector Processing Unit Zve32x"
 
 filesets:
@@ -45,14 +45,11 @@ filesets:
     
     files_tb:
         files:
-        #- tb/vpu_stimulus_gen.sv
-        # - tb/vpu_pipeline_checker.sv
         - tb/tb_vpu_pkg.sv
         - tb/cvxif_cpu_model.sv
         - tb/obi_mem_model.sv
         - tb/tb_vpu_common.svh:    {is_include_file: true}
         - tb/tb_vpu_alu.sv
-        - tb/tb_vpu_top.sv
         - tb/tb_vpu_dispatch.sv
         - tb/tb_vpu_csr.sv
         - tb/tb_vpu_xif_decoder.sv
