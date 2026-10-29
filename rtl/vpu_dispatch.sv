@@ -33,6 +33,7 @@ module vpu_dispatch
         logic [4:0]                 vs2_base;
         logic [XLEN-1:0]            rs1_base;
         logic [3:0]                 emul_val;       
+        logic [3:0]                 emul_vd_val;    // vd group (hazard range)
         logic [FRAG_CNT_W-1:0]      total_frags;    
         logic                       uses_vs1;
         logic                       uses_vs2;
@@ -48,6 +49,7 @@ module vpu_dispatch
     typedef struct packed {
         logic [4:0]            vs1, vs2, vd;
         logic [ROW_W-1:0]      row_vs1, row_vs2, row_vd;
+        logic [SEL_W-1:0]      sel_vs1, sel_vs2, sel_vd;
         logic [FRAG_CNT_W-1:0] vd_frag;
         logic                  vd_frag_done;
         logic                  vd_we;
@@ -211,22 +213,47 @@ module vpu_dispatch
         return (age != '0) && !age[X_ID_WIDTH-1];
     endfunction
 
+    // Register, row and slice of an operand whose EEW is 2^sh smaller than the iteration EEW
+    function automatic void opnd_pos(input  logic [4:0]            base,
+                                     input  logic [1:0]            sh,
+                                     input  logic [FRAG_CNT_W-1:0] frag_idx,
+                                     output logic [4:0]            vreg,
+                                     output logic [ROW_W-1:0]      row,
+                                     output logic [SEL_W-1:0]      sel);
+        logic [FRAG_CNT_W-1:0] n;
+        n    = frag_idx >> sh;
+
+        vreg = base + 5'(n / FRAGS_PER_REG);
+        row  = ROW_W'(n % FRAGS_PER_REG);
+        sel  = SEL_W'(frag_idx & FRAG_CNT_W'((1 << sh) - 1));
+    endfunction
+
     function automatic opnd_view_t calc_view(input slot_t s,
-                                            input logic [REG_OFF_W-1:0] roffset,
-                                            input logic [ROW_W-1:0]     row);
+                                            input logic [FRAG_CNT_W-1:0] frag_idx,
+                                            input logic [REG_OFF_W-1:0]  roffset,
+                                            input logic [ROW_W-1:0]      row);
         opnd_view_t v;
         logic last = (s.next_frag == s.total_frags - 1);
 
         // default: every operand walks the group in lockstep
-        v.vs1 = s.vs1_base + 5'(roffset);
-        v.vs2 = s.vs2_base + 5'(roffset);
-        v.vd  = s.vd_base  + 5'(roffset);
-        v.row_vs1 = row;    
-        v.row_vs2 = row;    
-        v.row_vd  = row;    
-        v.vd_frag      = s.next_frag;
-        v.vd_frag_done = 1'b1;
+        opnd_pos(s.vs1_base, s.decoded.sh_vs1, frag_idx, v.vs1, v.row_vs1, v.sel_vs1);
+        opnd_pos(s.vs2_base, s.decoded.sh_vs2, frag_idx, v.vs2, v.row_vs2, v.sel_vs2);
+        opnd_pos(s.vd_base,  s.decoded.sh_vd,  frag_idx, v.vd,  v.row_vd,  v.sel_vd);
+        // v.vs1 = s.vs1_base + 5'(roffset);
+        // v.vs2 = s.vs2_base + 5'(roffset);
+        // v.vd  = s.vd_base  + 5'(roffset);
+        // v.row_vs1 = row;    
+        // v.row_vs2 = row;    
+        // v.row_vd  = row;    
+
         v.vd_we        = 1'b1;
+        // vd row index in vd space; a sliced (narrowing) row is complete after its last slice
+        // v.vd_frag      = s.next_frag;
+        // v.vd_frag_done = 1'b1;
+        v.vd_frag      = frag_idx >> s.decoded.sh_vd;
+        v.vd_frag_done = (v.sel_vd == SEL_W'((1 << s.decoded.sh_vd) - 1)) || last;
+
+
         if (s.decoded.is_reduction) begin
             // vd (EMUL=1) is written only while reading the first register of the vs2 group (roffset == 0),
             // on the same row being read.
@@ -238,7 +265,6 @@ module vpu_dispatch
             v.vd_frag      = '0;
             v.vd_frag_done = last;
         end
-        // future: is_widening / is_narrowing cases go here
         return v;
     endfunction
 
@@ -276,29 +302,17 @@ module vpu_dispatch
     /////////////////////////////////
     
     logic [MAX_INFLIGHT-1:0] slot_hazard; 
-    // logic [4:0] cur_vs1, cur_vs2, cur_vd;
 
     always_comb begin
         slot_hazard = '0;
 
         for (int s = 0; s < MAX_INFLIGHT; s++) begin
 
-            view[s] = calc_view(slot_q[s], reg_offset[s], ROW_W'(frag_in_reg[s]));
+            view[s] = calc_view(slot_q[s], frag_idx[s], reg_offset[s], ROW_W'(frag_in_reg[s]));
 
             // All fragments dispatched. No hazard.
             if (!slot_q[s].valid) continue;
             if (slot_q[s].next_frag >= slot_q[s].total_frags) continue;
-
-            // Current register addresses for slot s's next fragment
-            // if (slot_q[s].decoded.is_reduction) begin
-            //     cur_vs1 = slot_q[s].vs1_base;
-            //     cur_vs2 = slot_q[s].vs2_base + 5'(reg_offset[s]);
-            //     cur_vd  = slot_q[s].vd_base;
-            // end else begin
-            //     cur_vs1 = slot_q[s].vs1_base + 5'(reg_offset[s]);
-            //     cur_vs2 = slot_q[s].vs2_base + 5'(reg_offset[s]);
-            //     cur_vd  = slot_q[s].vd_base  + 5'(reg_offset[s]);
-            // end 
 
             for (int p = 0; p < MAX_INFLIGHT; p++) begin
                 if (p == s)            continue;
@@ -311,7 +325,7 @@ module vpu_dispatch
 
                 // RAW: vs1 depends on p's vd
                 if (slot_q[s].uses_vs1) begin
-                    if (view[s].vs1 >= slot_q[p].vd_base && view[s].vs1 <  slot_q[p].vd_base + 5'(slot_q[p].emul_val)) begin
+                    if (view[s].vs1 >= slot_q[p].vd_base && view[s].vs1 <  slot_q[p].vd_base + 5'(slot_q[p].emul_vd_val)) begin
                         automatic logic [FRAG_CNT_W-1:0] fg;
                         // fg index into p's frag_done_mask:
                         fg = FRAG_CNT_W'(view[s].vs1 - slot_q[p].vd_base) * 
@@ -329,14 +343,14 @@ module vpu_dispatch
                         //     wb_frag[p]);
 
                         // $display("%0t: RAW vs1, s=%0d p=%0d fg of p's=%0d view[s].vs1=%0d vd_base=%0d frag_in_reg=%0d FRAGS_PER_REG=%0d lmul=%0d",
-                        //     $time, s, p, fg, view[s].vs1, slot_q[p].vd_base, frag_in_reg[s], FRAGS_PER_REG, slot_q[p].emul_val);
+                        //     $time, s, p, fg, view[s].vs1, slot_q[p].vd_base, frag_in_reg[s], FRAGS_PER_REG, slot_q[p].emul_vd_val);
                     end
                 end
 
                 // RAW: vs2 depends on p's vd 
                 if (slot_q[s].uses_vs2) begin
                     if (view[s].vs2 >= slot_q[p].vd_base &&
-                        view[s].vs2 <  slot_q[p].vd_base + 5'(slot_q[p].emul_val))
+                        view[s].vs2 <  slot_q[p].vd_base + 5'(slot_q[p].emul_vd_val))
                     begin
                         automatic logic [FRAG_CNT_W-1:0] fg;
                         fg = FRAG_CNT_W'(view[s].vs2 - slot_q[p].vd_base) *
@@ -347,7 +361,7 @@ module vpu_dispatch
                             slot_hazard[s] = 1'b1;
 
                             // $display("%0t: RAW vs2, s=%0d p=%0d fg=%0d view[s].vs2=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
-                            //     $time, s, p, fg, view[s].vs2, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_val);
+                            //     $time, s, p, fg, view[s].vs2, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_vd_val);
                         end
                     end
                 end
@@ -355,7 +369,7 @@ module vpu_dispatch
                 // RAW: vd_src  
                 if (slot_q[s].uses_vd_src) begin
                     if (view[s].vd >= slot_q[p].vd_base &&
-                        view[s].vd <  slot_q[p].vd_base + 5'(slot_q[p].emul_val))
+                        view[s].vd <  slot_q[p].vd_base + 5'(slot_q[p].emul_vd_val))
                     begin
                         automatic logic [FRAG_CNT_W-1:0] fg;
                         fg = FRAG_CNT_W'(view[s].vd - slot_q[p].vd_base) *
@@ -365,14 +379,14 @@ module vpu_dispatch
                             slot_hazard[s] = 1'b1;
 
                             // $display("%0t: RAW vd_src, s=%0d p=%0d fg=%0d view[s].vd=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
-                            //     $time, s, p, fg, view[s].vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_val);
+                            //     $time, s, p, fg, view[s].vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_vd_val);
                         end
                     end
                 end
 
                 // WAW: both slots writing same register group.
                 if (view[s].vd >= slot_q[p].vd_base &&
-                    view[s].vd <  slot_q[p].vd_base + 5'(slot_q[p].emul_val))
+                    view[s].vd <  slot_q[p].vd_base + 5'(slot_q[p].emul_vd_val))
                 begin
                     automatic logic [FRAG_CNT_W-1:0] fg;
                     fg = FRAG_CNT_W'(view[s].vd - slot_q[p].vd_base) *
@@ -383,7 +397,7 @@ module vpu_dispatch
                         slot_hazard[s] = 1'b1;
                         
                         // $display("%0t: WAW, s=%0d p=%0d fg=%0d cur_vd=%0d vd_base=%0d frag_in_reg=%0d lmul=%0d",
-                        //         $time, s, p, fg, view[s].vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_val);
+                        //         $time, s, p, fg, view[s].vd, slot_q[p].vd_base, frag_in_reg[s], slot_q[p].emul_vd_val);
                         // $display(
                         //     "WAW: s=%0d p=%0d s_id=%0d p_id=%0d next_frag_s=%0d next_frag_p=%0d",
                         //     s, p,
@@ -429,7 +443,7 @@ module vpu_dispatch
 
             fu_instr_valid[i] = slot_issue_en[i];
             if (slot_issue_en[i]) begin
-                automatic sew_e esew = elem_eew(slot_q[i].decoded);
+                automatic sew_e esew = slot_q[i].decoded.eew;
 
                 // Fragment index for data allocation in functional units
                 dispatch_last[i].next_frag    = slot_q[i].next_frag;
@@ -441,13 +455,15 @@ module vpu_dispatch
                 dispatch_last[i].row_vs1      = view[i].row_vs1;
                 dispatch_last[i].row_vs2      = view[i].row_vs2;
                 dispatch_last[i].row_vd       = view[i].row_vd;
+                dispatch_last[i].sel_vs1      = view[i].sel_vs1;
+                dispatch_last[i].sel_vs2      = view[i].sel_vs2;
+                dispatch_last[i].sel_vd       = view[i].sel_vd;
                 dispatch_last[i].vd_frag      = view[i].vd_frag;
                 dispatch_last[i].vd_frag_done = view[i].vd_frag_done;
                 dispatch_last[i].vd_we        = view[i].vd_we;
                 dispatch_last[i].elem_base    = vl_t'(frag_idx[i]) * calc_epf(esew);   // source element space
                 dispatch_last[i].elements     = calc_elements_for_frag(slot_q[i].decoded.vl, esew,
                                                 slot_q[i].decoded.instr_enum, frag_idx[i]);
-                // dispatch_last[i].dispatch_raddr1 = slot_q[i].rs1_base + mem_offset[i];
                 dispatch_last[i].dispatch_raddr1 = '0;
 
                 // Start from stored metadata
@@ -484,27 +500,12 @@ module vpu_dispatch
         // Route to target FU by instruction type
         if (disp_decoded_i.is_load || disp_decoded_i.is_store)
             new_fu_id = 2'(FU_VLSU);
-        else if (disp_decoded_i.is_permutation || disp_decoded_i.is_reduction || disp_decoded_i.is_widening || disp_decoded_i.is_narrowing)
+        else if (disp_decoded_i.is_permutation || disp_decoded_i.is_reduction)
             new_fu_id = 2'(FU_VSLD);
         else
             new_fu_id = 2'(FU_VALU);   // arith, reductions, mask ops
 
         new_slot_free = !slot_q[new_fu_id].valid && !result_pending_q[new_fu_id];
-
-    //     // Instruction-level WAW check
-    //     begin
-    //         logic [3:0] new_lmul;
-    //         new_lmul  = vlmul_to_val(disp_decoded_i.vlmul);
-    //         new_waw   = 1'b0;
-    //         for (int p = 0; p < MAX_INFLIGHT; p++) begin
-    //             if (slot_q[p].valid) begin
-    //                 // Overlap if ranges intersect
-    //                 if ((disp_decoded_i.vd < slot_q[p].vd_base + 5'(slot_q[p].emul_val)) &&
-    //                     (slot_q[p].vd_base  < disp_decoded_i.vd + 5'(new_lmul)))
-    //                     new_waw = 1'b1;
-    //             end
-    //         end
-    //     end
 
         // dispatch_fire = disp_valid_i && new_slot_free && !new_waw;
         // dispatch_fire = disp_valid_i && new_slot_free;
@@ -571,11 +572,11 @@ module vpu_dispatch
 
         // Allocate new slot on dispatch 
         if (dispatch_fire) begin
-            logic [3:0] lv;
+            logic [3:0] lv, lv_vd;
             sew_e veew;
-            // lv   = vlmul_to_val(disp_decoded_i.vtype.vlmul, disp_issue_i.instr_issue.req.instr[17:15], (disp_decoded_i.instr_enum == VMVNRR_V)); // Considers CSRs?
-            // vsew = disp_decoded_i.vtype.vsew;
+
             lv   = vlmul_to_val(disp_decoded_i.emul, disp_issue_i.instr_issue.req.instr[17:15], (disp_decoded_i.instr_enum == VMVNRR_V)); // Considers CSRs?
+            lv_vd = vlmul_to_val(disp_decoded_i.emul_vd, disp_issue_i.instr_issue.req.instr[17:15], (disp_decoded_i.instr_enum == VMVNRR_V));
             veew = disp_decoded_i.eew;
 
             slot_d[new_fu_id].valid          = 1'b1;
@@ -585,6 +586,7 @@ module vpu_dispatch
             slot_d[new_fu_id].vs2_base       = disp_decoded_i.vs2;
             slot_d[new_fu_id].rs1_base       = disp_decoded_i.rs1_data;
             slot_d[new_fu_id].emul_val       = lv;
+            slot_d[new_fu_id].emul_vd_val    = lv_vd;
             slot_d[new_fu_id].total_frags    = calc_total_frags(
                                                    disp_decoded_i.vl, veew, lv, disp_decoded_i.instr_enum, disp_decoded_i.vtype.vta);
             slot_d[new_fu_id].uses_vs1       = disp_decoded_i.uses_vs1;

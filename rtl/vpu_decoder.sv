@@ -31,13 +31,25 @@ import rvv_instr_pkg::*;
     output logic [XLEN-1:0]     avl_o
 );
 
-    logic unused_illegal;   // get_emul() illegal flag, not used by the decoder
+    logic unused_illegal;    // get_emul() illegal flag, not used by the decoder
+    logic  dbl_sew_ill;      // widening with SEW=32
+    logic  dbl_lmul_ill;     // widening with LMUL=8
+    logic  vs1_wide;         // widening reductions: vs1[0] is 2*SEW
+    logic  is_indexed;
+    logic  ew_overlap;
+    sew_e  sew_w;            // EEW from the width field (loads/stores)
+    lmul_e lmul_w;
+    sew_e  sew_2x;
+    lmul_e lmul_2x;
 
     always_comb begin : decoder
 
-        decoded_req_o = '0;
-        avl_o = '0;
+        decoded_req_o  = '0;
+        avl_o          = '0;
         unused_illegal = 1'b0;
+        dbl_sew_ill    = 1'b0;
+        dbl_lmul_ill   = 1'b0;
+        ew_overlap     = 1'b0;
 
         if (req_valid_i) begin
             
@@ -747,7 +759,7 @@ import rvv_instr_pkg::*;
                 VWMACCU_VV, VWMACCU_VX, VWMACC_VV, VWMACC_VX
                 };
 
-                decoded_req_o.emul = vtype_i.vlmul;     // TODO: modify for widen/narrow
+                // decoded_req_o.emul = vtype_i.vlmul;     // TODO: modify for widen/narrow
 
             end
             else if (decoded_req_o.major_opcode == OPCODE_STORE) begin                                        //is_store
@@ -765,8 +777,6 @@ import rvv_instr_pkg::*;
                 
                 decoded_req_o.uses_vd_src     = 1'b1;                                                         // vs3 = store data, same field as vd
                 decoded_req_o.uses_vs2        = (decoded_req_o.mop == 2'b01) || (decoded_req_o.mop == 2'b11); // index 
-                                
-                decoded_req_o.emul = get_emul(instr_req_i.instr_issue.req.instr[14:12], vtype_i.vsew, vtype_i.vlmul, unused_illegal);
                 
             end
             else if (decoded_req_o.major_opcode == OPCODE_LOAD) begin                                        //is_load
@@ -784,20 +794,90 @@ import rvv_instr_pkg::*;
                 decoded_req_o.vd              = instr_req_i.instr_issue.req.instr[11:7];
                 decoded_req_o.uses_vd_src     = 1'b1;
 
-                decoded_req_o.emul = get_emul(instr_req_i.instr_issue.req.instr[14:12], vtype_i.vsew, vtype_i.vlmul, unused_illegal);
-
             end 
             else if (decoded_req_o.major_opcode == OPCODE_SYSTEM) begin                                        
-                decoded_req_o.vd = instr_req_i.instr_issue.req.instr[11:7];
+                decoded_req_o.vd       = instr_req_i.instr_issue.req.instr[11:7];
                 decoded_req_o.rs1_data = instr_req_i.instr_issue.req.instr[31:20];
-                decoded_req_o.emul = vtype_i.vlmul;
+                // decoded_req_o.emul     = vtype_i.vlmul;
             end
         end
         
-        decoded_req_o.eew       = elem_eew(decoded_req_o);
+        // decoded_req_o.eew       = elem_eew(decoded_req_o);
         decoded_req_o.writeback = instr_req_i.instr_issue.resp.writeback;
+
+        ////////////////////////////
+        // Per-operand EEW / EMUL //
+        ////////////////////////////
+
+        decoded_req_o.vd_wide   = decoded_req_o.is_widening;
+        decoded_req_o.vs2_wide  = decoded_req_o.is_narrowing ||
+                                  (decoded_req_o.instr_enum inside {VWADD_WV, VWADD_WX, VWADDU_WV, VWADDU_WX,
+                                                                 VWSUB_WV, VWSUB_WX, VWSUBU_WV, VWSUBU_WX});
+
+        vs1_wide   = decoded_req_o.is_widening && decoded_req_o.is_reduction;
+        is_indexed = decoded_req_o.mop inside {2'b01, 2'b11};
         
-        // Alignment check
+        sew_2x  = dbl_sew (vtype_i.vsew,  dbl_sew_ill);
+        lmul_2x = dbl_lmul(vtype_i.vlmul, dbl_lmul_ill);
+        sew_w   = elem_eew(decoded_req_o);                // width-based EEW for ld/st
+        lmul_w  = get_emul(decoded_req_o.width, vtype_i.vsew, vtype_i.vlmul, unused_illegal);   // ld/st
+
+        if (decoded_req_o.is_load || decoded_req_o.is_store) begin
+            // unit-stride/strided: data at width EEW. Indexed: data at SEW/LMUL, index (vs2) at width EEW
+            decoded_req_o.eew_vd   = is_indexed ? vtype_i.vsew  : sew_w;
+            decoded_req_o.emul_vd  = is_indexed ? vtype_i.vlmul : lmul_w;
+            decoded_req_o.eew_vs2  = sew_w;
+            decoded_req_o.emul_vs2 = lmul_w;
+            decoded_req_o.eew_vs1  = vtype_i.vsew;   
+            decoded_req_o.emul_vs1 = vtype_i.vlmul;
+        end else begin
+            decoded_req_o.eew_vd   = decoded_req_o.vd_wide  ? sew_2x  : vtype_i.vsew;
+            decoded_req_o.emul_vd  = decoded_req_o.vd_wide  ? lmul_2x : vtype_i.vlmul;
+            decoded_req_o.eew_vs2  = decoded_req_o.vs2_wide ? sew_2x  : vtype_i.vsew;
+            decoded_req_o.emul_vs2 = decoded_req_o.vs2_wide ? lmul_2x : vtype_i.vlmul;
+            decoded_req_o.eew_vs1  = vtype_i.vsew;        
+            decoded_req_o.emul_vs1 = vtype_i.vlmul;
+        end
+        
+        // Reductions: vd and vs1 are scalars in element 0
+        if (decoded_req_o.is_reduction) begin
+            decoded_req_o.emul_vd  = LMUL_1;
+            decoded_req_o.emul_vs1 = LMUL_1;
+        end
+
+    // Iteration operand: vs2 for reductions, otherwise the widest one
+        if (decoded_req_o.is_reduction || (decoded_req_o.eew_vs2 > decoded_req_o.eew_vd)) begin
+            decoded_req_o.eew  = decoded_req_o.eew_vs2;
+            decoded_req_o.emul = decoded_req_o.emul_vs2;
+        end else begin
+            decoded_req_o.eew  = decoded_req_o.eew_vd;
+            decoded_req_o.emul = decoded_req_o.emul_vd;
+        end
+
+        decoded_req_o.sh_vd  = decoded_req_o.is_reduction ? 2'd0 : eew_shift(decoded_req_o.eew, decoded_req_o.eew_vd);
+        decoded_req_o.sh_vs1 = decoded_req_o.is_reduction ? 2'd0 : eew_shift(decoded_req_o.eew, decoded_req_o.eew_vs1);
+        decoded_req_o.sh_vs2 = eew_shift(decoded_req_o.eew, decoded_req_o.eew_vs2);
+
+        // vwmulsu, vwmaccus: signed vs2. vwmaccsu: signed vs1   // TODO: to be defined in simd_controller
+        decoded_req_o.vs2_sext = (decoded_req_o.operation inside {OP_VWADD, OP_VWSUB, OP_VWMUL, OP_VWMULSU,  OP_VWMACC, OP_VWMACCUS}) ||
+                                                                (decoded_req_o.instr_enum == VWREDSUM_VS);
+        decoded_req_o.vs1_sext =  decoded_req_o.operation inside {OP_VWADD, OP_VWSUB, OP_VWMUL, OP_VWMACC, OP_VWMACCSU};
+
+        // Illegal EEW/EMUL and register group overlap
+        // if (!decoded_req_o.is_reduction && !decoded_req_o.is_store) begin
+        //     if (decoded_req_o.uses_vs2)
+        //         ew_overlap |= ew_overlap_illegal(decoded_req_o.vd, decoded_req_o.eew_vd,  decoded_req_o.emul_vd,
+        //                                          decoded_req_o.vs2, decoded_req_o.eew_vs2, decoded_req_o.emul_vs2);
+        //     if (decoded_req_o.uses_vs1)
+        //         ew_overlap |= ew_overlap_illegal(decoded_req_o.vd, decoded_req_o.eew_vd,  decoded_req_o.emul_vd,
+        //                                          decoded_req_o.vs1, decoded_req_o.eew_vs1, decoded_req_o.emul_vs1);
+        // end
+        // decoded_req_o.ew_illegal = ((decoded_req_o.vd_wide || decoded_req_o.vs2_wide) && dbl_sew_ill) ||
+        //                            ((decoded_req_o.vd_wide || decoded_req_o.vs2_wide) && !decoded_req_o.is_reduction && dbl_lmul_ill) ||
+        //                            ew_overlap;
+
+        // assert property (@(posedge clk_i) req_valid_i |-> !decoded_req_o.ew_illegal)
+        //     else $error("Illegal EEW/EMUL or register group overlap: instr_enum=%0d", instr_req_i.vec_instr);
 
     end : decoder
 

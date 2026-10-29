@@ -131,9 +131,9 @@
     task automatic fail(input string msg);
         error_count++;
         case_errors++;
-        if (case_errors <= 6) begin                 // do not flood the log
+        if (case_errors <= 6) begin           // do not flood the log
             $error("[%0t] %s", $time, msg);
-            $stop;
+            // $stop;
         end
     endtask
 

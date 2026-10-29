@@ -91,18 +91,18 @@ import vpu_pkg::*;
     // DMA request configuration . EEW
     always_comb begin
         integer config_i;
-        unique case (instr_req.width)
-            3'b000: begin                           // EEW_8
+        unique case (instr_req.eew_vd)
+            SEW_8: begin                           // EEW_8
                 eew_d = 3'd3;   
                 element_bytes_d = 1;   
                 elements_per_port = DATA_BYTES;     
             end   
-            3'b101: begin                           // EEW_16
+            SEW_16: begin                           // EEW_16
                 eew_d = 3'd4;
                 element_bytes_d = 2;
                 elements_per_port = DATA_BYTES / 2; 
             end
-            3'b110: begin                           // EEW_32
+            SEW_32: begin                           // EEW_32
                 eew_d = 3'd5;
                 element_bytes_d = 4;
                 elements_per_port = DATA_BYTES / 4; 

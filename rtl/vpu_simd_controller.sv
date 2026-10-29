@@ -15,26 +15,26 @@ module simd_controller
     output dw_t result_o,
     if_xif_exe.exe_unit if_exe_wrapper
 );
-
-    op_e operation; 
+    vpu_decoded_t vpu_req;
+    op_e  lane_operation;
     vl_t  iter_vl;
     sew_e sew;
+
     logic is_signed; 
     logic carry;     // TODO : ?  
-    
-    assign operation = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.operation;
+
+    assign vpu_req = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded;
     assign iter_vl = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
-    // assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.vtype.vsew;
     assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.eew;
 
     always_comb begin
-        unique case (operation)
+        unique case (vpu_req.operation)
             OP_VMIN,
             OP_VMAX,
             OP_VMSLT,
-            OP_VMUL,
-            OP_VMULH,
-            OP_VMULHSU: is_signed = '1;
+            OP_VMUL, OP_VMULH, OP_VMULHSU, 
+            OP_VWADD, OP_VWSUB
+            : is_signed = '1;
             default: is_signed = '0;
         endcase
     end
@@ -55,7 +55,7 @@ module simd_controller
                 //     SEW_16: for (int i = 0; i < iter_vl; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
                 //     default: for (int i = 0; i < iter_vl; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
                 // endcase
-                unique case (sew)
+                unique case (vpu_req.eew_vs1)
                     SEW_8:   for (int i = 0; i < $bits(dw_t)/8; i++) op_s1[i*8 +: 8] = scalar_val[7:0];
                     SEW_16:  for (int i = 0; i < $bits(dw_t)/16; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
                     default: for (int i = 0; i < $bits(dw_t)/32; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
@@ -69,7 +69,7 @@ module simd_controller
                 //     SEW_16: for (int i = 0; i < iter_vl; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
                 //     default: for (int i = 0; i < iter_vl; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
                 // endcase
-                unique case (sew)
+                unique case (vpu_req.eew_vs1)
                     SEW_8:   for (int i = 0; i < $bits(dw_t)/8; i++) op_s1[i*8 +: 8] = scalar_val[7:0];
                     SEW_16:  for (int i = 0; i < $bits(dw_t)/16; i++) op_s1[i*16 +: 16] = scalar_val[15:0];
                     default: for (int i = 0; i < $bits(dw_t)/32; i++) op_s1[i*32 +: 32] = scalar_val[31:0];
@@ -79,7 +79,24 @@ module simd_controller
         endcase
     end
 
+    dw_t op_s1_ext, op_s2_ext;
+    assign op_s1_ext = ext_op(op_s1,   vpu_req.eew_vs1, vpu_req.sh_vs1, vpu_req.vs1_sext);
+    assign op_s2_ext = ext_op(op_s2_i, vpu_req.eew_vs2, vpu_req.sh_vs2, vpu_req.vs2_sext);
+
+    always_comb begin
+        unique case (vpu_req.operation)
+            OP_VWADDU, OP_VWADD:                             lane_operation = OP_VADD;
+            OP_VWSUBU, OP_VWSUB:                             lane_operation = OP_VSUB;
+            OP_VWMULU, OP_VWMUL, OP_VWMULSU:                 lane_operation = OP_VMUL;
+            OP_VWMACCU, OP_VWMACC, OP_VWMACCSU, OP_VWMACCUS: lane_operation = OP_VMACC;
+            OP_VNSRL:                                        lane_operation = OP_VSRL;
+            OP_VNSRA:                                        lane_operation = OP_VSRA;
+            default:                                         lane_operation = vpu_req.operation;
+        endcase
+    end
+
     red_acc_t red_acc;
+    dw_t      lanes_res;
 
     localparam int NUM_LANES = VPU_N_IPU;
 
@@ -97,7 +114,7 @@ module simd_controller
             vpu_simd_block i_simd_block (
                 .clk_i            (clk_i),
                 .rst_ni           (rst_ni),
-                .operation_i      (operation),
+                .operation_i      (lane_operation),
                 .operation_valid_i(if_exe_wrapper.wrapper_exe_instr_valid),
                 .op_s1_i          (lane_op_s1[i]), 
                 .op_s2_i          (lane_op_s2[i]),
@@ -138,18 +155,18 @@ module simd_controller
             if (lane_idx < NUM_LANES) begin
                 case (sew)
                     SEW_8: begin
-                        lane_op_s1[lane_idx][lane_offset +: 8] = op_s1[bit_index +: 8];
-                        lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_i[bit_index +: 8];
+                        lane_op_s1[lane_idx][lane_offset +: 8] = op_s1_ext[bit_index +: 8];
+                        lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_ext[bit_index +: 8];
                         lane_d    [lane_idx][lane_offset +: 8] = op_d_i[bit_index +: 8]; 
                     end
                     SEW_16: begin
-                        lane_op_s1[lane_idx][lane_offset +: 16] = op_s1[bit_index +: 16];
-                        lane_op_s2[lane_idx][lane_offset +: 16] = op_s2_i[bit_index +: 16];
+                        lane_op_s1[lane_idx][lane_offset +: 16] = op_s1_ext[bit_index +: 16];
+                        lane_op_s2[lane_idx][lane_offset +: 16] = op_s2_ext[bit_index +: 16];
                         lane_d    [lane_idx][lane_offset +: 16] = op_d_i[bit_index +: 16];
                     end
                     SEW_32: begin
-                        lane_op_s1[lane_idx][lane_offset +: 32] = op_s1[bit_index +: 32];
-                        lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_i[bit_index +: 32];
+                        lane_op_s1[lane_idx][lane_offset +: 32] = op_s1_ext[bit_index +: 32];
+                        lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_ext[bit_index +: 32];
                         lane_d    [lane_idx][lane_offset +: 32] = op_d_i[bit_index +: 32];
                     end
                 endcase
@@ -167,11 +184,11 @@ module simd_controller
         
   // Assemble final result
     always_comb begin
-        red_acc = '0;
-        result_o = '0;
-
+        red_acc   = '0;
+        result_o  = '0;
+        lanes_res = '0;
         //Masked results
-        unique case (operation)
+        unique case (vpu_req.operation)
             OP_VMSEQ,
             OP_VMSNE,
             OP_VMSLTU,
@@ -196,8 +213,9 @@ module simd_controller
             end
             default: begin
                 for (int i = 0; i < NUM_LANES; i++) begin
-                    result_o[i*32 +: 32] = lane_result[i];  
+                    lanes_res[i*32 +: 32] = lane_result[i];
                 end
+                result_o = vpu_req.is_narrowing ? pack_narrow(lanes_res, vpu_req.eew_vd) : lanes_res;
             end
         endcase
     end

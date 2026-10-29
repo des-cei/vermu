@@ -80,15 +80,13 @@ import vpu_pkg::*;
     logic        uses_vs1;
     logic        uses_vs2;
     logic        uses_vs3;
-    logic        illegal_align;
+    logic        illegal_align, illegal_sew, illegal_overlap;
     logic        illegal_emul_vd;
     logic        illegal_emul_vs1;
     logic        illegal_emul_vs2;
     logic        illegal_emul_vs3;
-    lmul_e       emul_vd;
-    lmul_e       emul_vs1;
-    lmul_e       emul_vs2;
-    lmul_e       emul_vs3;
+    lmul_e       emul_vd, emul_vs1, emul_vs2, emul_vs3;
+    sew_e        eew_vd, eew_vs1, eew_vs2;
 
     /////////////////////////////
     // Instruction Recognition //
@@ -139,13 +137,19 @@ import vpu_pkg::*;
         emul_vs1 = vtype_i.vlmul;
         emul_vs2 = vtype_i.vlmul;
         emul_vs3 = vtype_i.vlmul;
+
+        eew_vd  = vtype_i.vsew;
+        eew_vs1 = vtype_i.vsew;
+        eew_vs2 = vtype_i.vsew;
     
         illegal_emul_vd  = 1'b0;
         illegal_emul_vs1 = 1'b0;
         illegal_emul_vs2 = 1'b0;
         illegal_emul_vs3 = 1'b0;
 
-        illegal_align = 1'b0;
+        illegal_align   = 1'b0;
+        illegal_sew     = 1'b0;
+        illegal_overlap = 1'b0;
           
         vec_instr_o                  = INSTR_NONE;
         x_issue_resp_o.accept        = 1'b0;
@@ -914,6 +918,8 @@ import vpu_pkg::*;
                         emul_vd   = lmul_x2(vtype_i.vlmul, illegal_emul_vd);
                         emul_vs1  = vtype_i.vlmul;
                         emul_vs2  = vtype_i.vlmul;
+
+                        eew_vd  = dbl_sew(vtype_i.vsew, illegal_sew);
                     end
 
                     // Widening add/sub
@@ -925,6 +931,10 @@ import vpu_pkg::*;
                         emul_vd  = lmul_x2(vtype_i.vlmul, illegal_emul_vd);
                         emul_vs1 = vtype_i.vlmul;
                         emul_vs2 = lmul_x2(vtype_i.vlmul, illegal_emul_vs2);
+
+                        eew_vd   = dbl_sew(vtype_i.vsew, illegal_sew); 
+                        eew_vs1  = vtype_i.vsew;
+                        eew_vs2  = eew_vd;                             
                     end
                     // Unary operations
                     // VCPOP_M  // No need of reg check
@@ -984,6 +994,8 @@ import vpu_pkg::*;
 
                         emul_vd  = lmul_x2(vtype_i.vlmul, illegal_emul_vd);
                         emul_vs2 = vtype_i.vlmul;
+
+                        eew_vd   = dbl_sew(vtype_i.vsew, illegal_sew); 
                     end
                     // Widening add/sub
                     VWADDU_WX, VWADD_WX, VWSUBU_WX, VWSUB_WX: begin
@@ -992,6 +1004,9 @@ import vpu_pkg::*;
 
                         emul_vd  = lmul_x2(vtype_i.vlmul, illegal_emul_vd);
                         emul_vs2 = lmul_x2(vtype_i.vlmul, illegal_emul_vs2);
+
+                        eew_vd   = dbl_sew(vtype_i.vsew, illegal_sew); 
+                        eew_vs2  = eew_vd;  
                     end
                     // VMV_SX: ignores LMUL and register groups (RVV 16.1), no reg check
 
@@ -1080,7 +1095,10 @@ import vpu_pkg::*;
                 illegal_emul_vs2 || 
                 illegal_emul_vs3;
 
-            if (illegal_align) begin
+            illegal_overlap = (uses_vs1 && ew_overlap_illegal(vd, eew_vd, emul_vd, vs1, eew_vs1, emul_vs1)) ||
+                          (uses_vs2 && ew_overlap_illegal(vd, eew_vd, emul_vd, vs2, eew_vs2, emul_vs2));
+
+            if (illegal_align || illegal_sew || illegal_overlap) begin
                 x_issue_resp_o.accept = 1'b0;
                 x_issue_resp_o.writeback = 1'b0;
                 x_issue_resp_o.register_read = '0;

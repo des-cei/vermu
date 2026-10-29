@@ -139,14 +139,24 @@ package vpu_pkg;
         logic          is_reduction;
         logic          is_widening;
         logic          is_narrowing;
+        sew_e          eew;
+        lmul_e         emul;
+        logic          vd_wide;         // vd EEW = 2*SEW, EMUL = 2 * LMUL
+        logic          vs2_wide;        // vs2 EEW = 2*SEW, EMUL = 2 * LMUL 
+        sew_e          eew_vd, eew_vs2, eew_vs1;
+        lmul_e         emul_vd, emul_vs2, emul_vs1;
+        logic [1:0]    sh_vd;           // log2(eew / eew_op): operand advances one row every 2^sh frags
+        logic [1:0]    sh_vs1;
+        logic [1:0]    sh_vs2;
+        logic          vs1_sext;        // sign- (1) or zero-extend (0) a narrow source
+        logic          vs2_sext;
+        // logic          ew_illegal;      // illegal EEW/EMUL or register group overlap
         logic          uses_vs1;
         logic          uses_vs2;
         logic          uses_vd_src;
         logic          uses_rs1_scalar;
         logic          uses_rs2_scalar;
-        logic          uses_imm;
-        sew_e          eew;
-        lmul_e         emul;
+        logic          uses_imm;                         
         vtype_t        vtype;
         vl_t           vl;
         vl_t           vstart;
@@ -176,6 +186,7 @@ package vpu_pkg;
     localparam int unsigned FRAG_MSK_W    = FRAG_MAX;
     localparam int unsigned REG_OFF_W     = $clog2(VPU_LMUL_MAX) + 1;
     localparam int unsigned ROW_W         = (FRAGS_PER_REG > 1) ? $clog2(FRAGS_PER_REG) : 1;
+    localparam int unsigned SEL_W         = 2;   // sub-row slice select (EEW ratio up to 4)
 
     typedef struct packed { 
         logic [FRAG_CNT_W-1:0]   next_frag;         // global set counter
@@ -192,7 +203,10 @@ package vpu_pkg;
         logic [XLEN-1:0]         dispatch_raddr1; 
         logic [FRAG_CNT_W-1:0]   vd_frag;           // global fragment index inside the vd group
         logic                    vd_frag_done;      // this write completes vd_frag (consumers may read it)
-        logic                    vd_we;              
+        logic                    vd_we;      
+        logic [SEL_W-1:0]        sel_vd;            // slice of the row used this step (narrow operands)
+        logic [SEL_W-1:0]        sel_vs1;
+        logic [SEL_W-1:0]        sel_vs2;        
     } dispatch_sideband_t;
 
     ///////////////////
@@ -336,6 +350,95 @@ package vpu_pkg;
                     return LMUL_F4;
             end
         endcase
+    endfunction
+
+    // 2*SEW
+    function automatic sew_e dbl_sew(input sew_e sew, output logic illegal);
+        illegal = 1'b0;
+        unique case (sew)
+            SEW_8:   return SEW_16;
+            SEW_16:  return SEW_32;
+            default: begin
+                illegal = 1'b1;
+                return SEW_32;
+            end
+        endcase
+    endfunction
+
+    // 2*LMUL
+    function automatic lmul_e dbl_lmul(input lmul_e l, output logic illegal);
+        illegal = 1'b0;
+        unique case (l)
+            LMUL_F4: return LMUL_F2;
+            LMUL_F2: return LMUL_1;
+            LMUL_1:  return LMUL_2;
+            LMUL_2:  return LMUL_4;
+            LMUL_4:  return LMUL_8;
+            default: begin 
+                illegal = 1'b1;
+                return LMUL_8;
+            end
+        endcase
+    endfunction
+
+    // log2(eew / eew_op), with eew >= eew_op
+    function automatic logic [1:0] eew_shift(input sew_e eew, input sew_e eew_op);
+        return 2'(eew - eew_op);
+    endfunction
+
+    // Registers in a group (fractional EMUL occupies one register)
+    function automatic int unsigned lmul_regs(input lmul_e lmul);
+        unique case (lmul)
+            LMUL_2:  return 2;
+            LMUL_4:  return 4;
+            LMUL_8:  return 8;
+            default: return 1;
+        endcase
+    endfunction
+
+    // RVV 5.2: vd may overlap a source of different EEW only in the highest-numbered part of vd
+    // (vd wider, source EMUL >= 1) or in the lowest-numbered part of the source (vd narrower) 
+    function automatic logic ew_overlap_illegal(input logic [4:0] vd, input sew_e eew_des, input lmul_e emul_des,
+                                                input logic [4:0] vs, input sew_e eew_sour, input lmul_e emul_sour);
+        int unsigned n_dest, n_sour;
+        n_dest = lmul_regs(emul_des);
+        n_sour = lmul_regs(emul_sour);
+        if (eew_des == eew_sour)                     return 1'b0;
+        if ((vs + n_sour <= vd) || (vd + n_dest <= vs)) return 1'b0;
+        if (eew_des > eew_sour)
+            return !((emul_sour inside {LMUL_1, LMUL_2, LMUL_4, LMUL_8}) && (vs == vd + n_dest - n_sour));
+        return (vd != vs);
+    endfunction
+
+    // Sign/zero-extend each element of data_s from eew to 2*eew (sh = 1).
+    function automatic dw_t ext_op(input dw_t data_s, input sew_e eew, input logic [1:0] sh, input logic sext);
+        dw_t data_d;
+        data_d = data_s;
+        if (sh != '0) begin
+            data_d = '0;
+            unique case (eew)
+                SEW_8:   for (int e = 0; e < DW/16; e++) 
+                            data_d[e*16 +: 16] = {{8{sext & data_s[e*8+7]}},    data_s[e*8  +: 8]};
+                SEW_16:  for (int e = 0; e < DW/32; e++) 
+                            data_d[e*32 +: 32] = {{16{sext & data_s[e*16+15]}}, data_s[e*16 +: 16]};
+                default: ;
+            endcase
+        end
+        return data_d;
+    endfunction
+
+    // Narrowing: keep the low eew_vd bits of each 2*eew_vd element, packed into the low half
+    function automatic dw_t pack_narrow(input dw_t data_s, input sew_e eew_vd);
+        dw_t data_d;
+        data_d = '0;
+        unique case (eew_vd)
+            SEW_8:   for (int e = 0; e < DW/16; e++)
+                        data_d[e*8  +: 8]  = data_s[e*16 +: 8];
+            SEW_16:  for (int e = 0; e < DW/32; e++) 
+                        data_d[e*16 +: 16] = data_s[e*32 +: 16];
+            default: data_d = data_s;
+        endcase
+        return data_d;
     endfunction
 
     function automatic int get_lane_limit(input sew_e SEW, input int unsigned vl);

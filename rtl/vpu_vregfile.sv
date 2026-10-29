@@ -68,29 +68,37 @@ module vpu_vregfile
                             ((decoded_req[FU_VSLD].instr_enum == VMV_SX) && (decoded_req[FU_VSLD].vl == '0)) ||
                             ((decoded_req[FU_VSLD].is_reduction) && (decoded_req[FU_VSLD].vl == '0))) ? '0: if_monitor_vsld.exe_wrapper_result.xif_fifo_result.result_valid_exec_o;
 
+    // Slice sel of a row split in 2^sh parts, moved to bit 0
+    function automatic dw_t row_slice(input dw_t row, input logic [1:0] sh, input logic [SEL_W-1:0] sel);
+        return row >> (int'(sel) * (DW >> sh));
+    endfunction
+
     function automatic dw_t active_elements_mask(
-        input vpu_decoded_t request,
-        input logic [FRAG_CNT_W-1:0] fragment,
-        input vl_t fragment_vl
+        input vpu_decoded_t          request,
+        input sew_e                  eew_op,
+        // input logic [FRAG_CNT_W-1:0] fragment,
+        input vl_t                   elem_base,
+        input vl_t                   fragment_vl
     );
         dw_t mask;
         int sew_bits;
         int bytes_per_element;
         int elements_per_fragment;
-        int fragment_start;
+        // int fragment_start;
         int element_index;
         int global_element;
 
         mask = '0;
-        // sew_bits = get_sew_bits(request.vtype.vsew); //TODO: EEW/SEW
-        sew_bits = get_eew_bits(request.eew); //TODO: EEW/SEW
+        sew_bits = get_eew_bits(eew_op);                //TODO: eew_op/SEW
         bytes_per_element = sew_bits / 8;
         elements_per_fragment = (VPU_N_IPU * ELEN) / sew_bits;
-        fragment_start = fragment * elements_per_fragment;
+        // fragment_start = fragment * elements_per_fragment;
 
         for (int byte_index = 0; byte_index < (VPU_N_IPU * ELEN) / 8; byte_index++) begin
             element_index = byte_index / bytes_per_element;
-            global_element = fragment_start + element_index;
+            // global_element = fragment_start + element_index;
+            global_element = elem_base + element_index;
+
 // `ifndef SYNTHESIS
 //         $display("[%0t] active_elements_mask: sew_bits=%0d bytes_per_element=%0d elements_per_fragment=%0d fragment=%0d fragment_vl=%0d fragment_start=%0d vstart=%0d vl=%0d element_index=%0d global_element=%0d",
 //                  $time, sew_bits, bytes_per_element, elements_per_fragment,
@@ -104,7 +112,6 @@ module vpu_vregfile
                 (global_element < request.vl)) begin
                 mask[8 * byte_index +: 8] = '1;
             end else if ((request.instr_enum == VMVNRR_V) && (global_element >= request.vstart)) begin  // TODO: move to result interface in unit
-                // vmv<nr>r.v: whole register move, ignores vl/LMUL (valid even with vl = 0)
                 mask[8 * byte_index +: 8] = '1;
             end
         end
@@ -123,7 +130,7 @@ module vpu_vregfile
         input dispatch_sideband_t f            // result (destination) view
     );
         dw_t  merged = old_vd;
-        int   bpe    = get_eew_bits(req.eew) / 8;   // (EEW for loads, as now)
+        int   bpe    = get_eew_bits(req.eew_vd) / 8;   // (EEW for loads, as now)
         int   epf    = DW / (bpe * 8);
         vl_t  row_g0 = (f.elem_base / epf) * epf;          // global idx of element 0 in this row
         vl_t  vl_eff = req.is_reduction ? vl_t'(1) : req.vl;
@@ -170,12 +177,16 @@ module vpu_vregfile
             if (raddr1[fu] < NRVREG) begin
                 rdata1_o[fu] = vreg[raddr1[fu]][issue_frag[fu].row_vs1];
                 if (!decoded_req[fu].is_reduction)
-                    rdata1_o[fu] = vreg[raddr1[fu]][issue_frag[fu].row_vs1] &
-                                    active_elements_mask(decoded_req[fu], issue_frag[fu].row_vs1, issue_frag[fu].elements);
+                    // rdata1_o[fu] = vreg[raddr1[fu]][issue_frag[fu].row_vs1] &
+                    rdata1_o[fu] = row_slice(vreg[raddr1[fu]][issue_frag[fu].row_vs1],
+                                                decoded_req[fu].sh_vs1, issue_frag[fu].sel_vs1) &
+                                    active_elements_mask(decoded_req[fu], decoded_req[fu].eew_vs1, issue_frag[fu].elem_base, issue_frag[fu].elements);
             end
             if (raddr2[fu] < NRVREG) begin
-                rdata2_o[fu] = vreg[raddr2[fu]][issue_frag[fu].row_vs2] &
-                                active_elements_mask(decoded_req[fu], issue_frag[fu].row_vs2, issue_frag[fu].elements);
+                // rdata2_o[fu] = vreg[raddr2[fu]][issue_frag[fu].row_vs2] &
+                rdata2_o[fu] = row_slice(vreg[raddr2[fu]][issue_frag[fu].row_vs2],
+                                            decoded_req[fu].sh_vs2, issue_frag[fu].sel_vs2) &
+                                active_elements_mask(decoded_req[fu], decoded_req[fu].eew_vs2, issue_frag[fu].elem_base, issue_frag[fu].elements);
                 // $display("[%0t] vreg_data[2]: %h", $time, vreg[raddr2[2]][issue_frag[2].row_vs2]);
             end
             if (vd[fu] < NRVREG) begin
@@ -195,7 +206,8 @@ module vpu_vregfile
                     vreg[vd[fu]][res_frag[fu].row_vd] <= merge_write_data(
                         // fu,
                         decoded_req[fu],
-                        wdata_i[fu],
+                        // wdata_i[fu],
+                        wdata_i[fu] << (int'(res_frag[fu].sel_vd) * (DW >> decoded_req[fu].sh_vd)), 
                         vreg[vd[fu]][res_frag[fu].row_vd],
                         res_frag[fu]
                     );
