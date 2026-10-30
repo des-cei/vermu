@@ -31,8 +31,8 @@ module vpu_dispatch
         logic [4:0]                 vd_base;
         logic [4:0]                 vs1_base;
         logic [4:0]                 vs2_base;
-        logic [XLEN-1:0]            rs1_base;
-        logic [3:0]                 emul_val;       
+        // logic [XLEN-1:0]            rs1_base;
+        // logic [3:0]                 emul_val;       
         logic [3:0]                 emul_vd_val;    // vd group (hazard range)
         logic [FRAG_CNT_W-1:0]      total_frags;    
         logic                       uses_vs1;
@@ -584,8 +584,8 @@ module vpu_dispatch
             slot_d[new_fu_id].vd_base        = (disp_decoded_i.major_opcode == OPCODE_STORE) ? disp_decoded_i.vs3 : disp_decoded_i.vd;
             slot_d[new_fu_id].vs1_base       = disp_decoded_i.vs1;
             slot_d[new_fu_id].vs2_base       = disp_decoded_i.vs2;
-            slot_d[new_fu_id].rs1_base       = disp_decoded_i.rs1_data;
-            slot_d[new_fu_id].emul_val       = lv;
+            // slot_d[new_fu_id].rs1_base       = disp_decoded_i.rs1_data;
+            // slot_d[new_fu_id].emul_val       = lv;
             slot_d[new_fu_id].emul_vd_val    = lv_vd;
             slot_d[new_fu_id].total_frags    = calc_total_frags(
                                                    disp_decoded_i.vl, veew, lv, disp_decoded_i.instr_enum, disp_decoded_i.vtype.vta);
@@ -693,7 +693,7 @@ module vpu_dispatch
     // Assertions //
     ////////////////
 
-`ifndef NO_ASSERT
+`ifndef SYNTHESIS
 
     property p_no_double_alloc;
         @(posedge clk_i) disable iff (!rst_ni)

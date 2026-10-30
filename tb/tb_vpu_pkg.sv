@@ -62,6 +62,11 @@ package tb_vpu_pkg;
     localparam logic [5:0] F6_VWSUBU_W = 6'b110110;
     localparam logic [5:0] F6_VWSUB_W  = 6'b110111;
 
+    // OP-V funct6, widening integer multiply (OPMVV / OPMVX group)
+    localparam logic [5:0] F6_VWMULU   = 6'b111000;
+    localparam logic [5:0] F6_VWMULSU  = 6'b111010;
+    localparam logic [5:0] F6_VWMUL    = 6'b111011;
+
     // OP-V funct6, widening integer multiply-add (OPMVV / OPMVX group)
     localparam logic [5:0] F6_VWMACCU  = 6'b111100;
     localparam logic [5:0] F6_VWMACC   = 6'b111101;
@@ -324,6 +329,28 @@ package tb_vpu_pkg;
             VWSUBU_WV, VWSUBU_WX, VWSUB_WV, VWSUB_WX: return vtb_trunc(b - a, w);
             default: $fatal(1, "vtb_wadd_elem: instruction %s not supported", instr.name());
         endcase
+    endfunction
+
+    // One element of a widening integer multiply (RVV 11.12), 2*SEW bits.
+    //   op1 : vs1[i] (.vv) or the scalar (.vx), SEW bits;  vs2 : vs2[i], SEW bits
+    //   vwmulu  : vd = unsigned(vs2) * unsigned(op1)
+    //   vwmul   : vd = signed(vs2)   * signed(op1)
+    //   vwmulsu : vd = signed(vs2)   * unsigned(op1)
+    // 'sew' is the narrow SEW (8 or 16); the 2*SEW product fits in 32 bits.
+    function automatic logic [31:0] vtb_wmul_elem(input rvv_instr_pkg::vec_instr_e instr,
+                                                  input logic [31:0] op1,
+                                                  input logic [31:0] vs2,
+                                                  input int sew);
+        import rvv_instr_pkg::*;
+        int          w     = 2 * sew;
+        bit          sgn_a = instr inside {VWMUL_VV, VWMUL_VX};
+        bit          sgn_b = instr inside {VWMUL_VV, VWMUL_VX, VWMULSU_VV, VWMULSU_VX};
+        logic [31:0] a, b;
+        if (!(instr inside {VWMULU_VV, VWMULU_VX, VWMUL_VV, VWMUL_VX, VWMULSU_VV, VWMULSU_VX}))
+            $fatal(1, "vtb_wmul_elem: instruction %s not supported", instr.name());
+        a = sgn_a ? 32'(vtb_sext(op1, sew)) : vtb_trunc(op1, sew);
+        b = sgn_b ? 32'(vtb_sext(vs2, sew)) : vtb_trunc(vs2, sew);
+        return vtb_trunc(a * b, w);
     endfunction
 
     // One element of a widening integer multiply-add (RVV 11.14), 2*SEW bits.
@@ -649,6 +676,30 @@ package tb_vpu_pkg;
             rvv_instr_pkg::VWSUB_WV:  begin f6 = F6_VWSUB_W;  f3 = FMT_OPMVV_CSRRS;  end
             rvv_instr_pkg::VWSUB_WX:  begin f6 = F6_VWSUB_W;  f3 = FMT_OPMVX_CSRRSI; end
             default: $fatal(1, "vtb_enc_wadd: instruction %s not supported", instr.name());
+        endcase
+        return vtb_opv(f6, vm, vs2, op1, f3, vd);
+    endfunction
+
+    // vwmulu / vwmul / vwmulsu  .vv (OPMVV) and .vx (OPMVX)
+    //   assembly: vwmul.vv vd, vs2, vs1  /  vwmul.vx vd, vs2, rs1
+    //   'op1' is vs1 or rs1 according to the _VV/_VX suffix
+    function automatic logic [31:0] vtb_enc_wmul(
+        input rvv_instr_pkg::vec_instr_e instr,
+        input logic [4:0] vd,
+        input logic [4:0] vs2,
+        input logic [4:0] op1,
+        input logic       vm = 1'b1
+    );
+        logic [5:0]  f6;
+        vec_funct3_e f3;
+        case (instr)
+            rvv_instr_pkg::VWMULU_VV:  begin f6 = F6_VWMULU;  f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VWMULU_VX:  begin f6 = F6_VWMULU;  f3 = FMT_OPMVX_CSRRSI; end
+            rvv_instr_pkg::VWMUL_VV:   begin f6 = F6_VWMUL;   f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VWMUL_VX:   begin f6 = F6_VWMUL;   f3 = FMT_OPMVX_CSRRSI; end
+            rvv_instr_pkg::VWMULSU_VV: begin f6 = F6_VWMULSU; f3 = FMT_OPMVV_CSRRS;  end
+            rvv_instr_pkg::VWMULSU_VX: begin f6 = F6_VWMULSU; f3 = FMT_OPMVX_CSRRSI; end
+            default: $fatal(1, "vtb_enc_wmul: instruction %s not supported", instr.name());
         endcase
         return vtb_opv(f6, vm, vs2, op1, f3, vd);
     endfunction

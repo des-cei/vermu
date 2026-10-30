@@ -27,18 +27,6 @@ module simd_controller
     assign iter_vl = if_exe_wrapper.wrapper_exe_instr_issue.instr_fragment.elements; 
     assign sew = if_exe_wrapper.wrapper_exe_instr_issue.instr_decoded.eew;
 
-    always_comb begin
-        unique case (vpu_req.operation)
-            OP_VMIN,
-            OP_VMAX,
-            OP_VMSLT,
-            OP_VMUL, OP_VMULH, OP_VMULHSU, 
-            OP_VWADD, OP_VWSUB
-            : is_signed = '1;
-            default: is_signed = '0;
-        endcase
-    end
-
     assign carry = '0; 
     
     dw_t         op_s1;
@@ -95,6 +83,18 @@ module simd_controller
         endcase
     end
 
+    always_comb begin
+        unique case (vpu_req.operation)
+            OP_VMIN,
+            OP_VMAX,
+            OP_VMSLT,
+            OP_VMUL, OP_VMULH, OP_VMULHSU, 
+            OP_VWADD, OP_VWSUB
+            : is_signed = '1;
+            default: is_signed = '0;
+        endcase
+    end
+    
     red_acc_t red_acc;
     dw_t      lanes_res;
 
@@ -153,7 +153,7 @@ module simd_controller
             lane_offset = bit_index % 32;   
     
             if (lane_idx < NUM_LANES) begin
-                case (sew)
+                unique case (sew)
                     SEW_8: begin
                         lane_op_s1[lane_idx][lane_offset +: 8] = op_s1_ext[bit_index +: 8];
                         lane_op_s2[lane_idx][lane_offset +: 8] = op_s2_ext[bit_index +: 8];
@@ -169,6 +169,7 @@ module simd_controller
                         lane_op_s2[lane_idx][lane_offset +: 32] = op_s2_ext[bit_index +: 32];
                         lane_d    [lane_idx][lane_offset +: 32] = op_d_i[bit_index +: 32];
                     end
+                    default:;
                 endcase
             end
         end 

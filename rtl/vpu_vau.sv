@@ -98,47 +98,47 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
     // Shifter //
     /////////////  
     
-    logic                     is_shift;
+    // logic                     is_shift;
     logic [Width-1:0]         shift_operand; 
     logic [$clog2(Width)-1:0] shift_amount;  
-	    
+
     always_comb begin : shifter
-        is_shift = operation_valid_i && operation_i inside {OP_VSLL, OP_VSRL, OP_VSRA};
-        if(is_shift) begin
-            if (Width == 32) begin   
-                unique case (sew_i)
-                    vpu_pkg::SEW_32: begin
-                        shift_amount = op_s1_i[4:0];
-                        shift_operand = op_s2_i;
-                    end
-                    vpu_pkg::SEW_16: begin
-                        shift_amount = op_s1_i[3:0];
-                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[15:0]);
-                        else shift_operand                     = $unsigned(op_s2_i[15:0]);
-                    end
-                    default: begin
-                        shift_amount = op_s1_i[2:0];
-                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[7:0]);
-                        else shift_operand = $unsigned(op_s2_i[7:0]);
-                    end
-                endcase
-            end else if (Width == 16) begin 
-                unique case (sew_i)
-                    vpu_pkg::SEW_16: begin
-                        shift_amount = op_s1_i[3:0];
-                        shift_operand = op_s2_i[15:0];
-                    end
-                    default: begin
-                        shift_amount = op_s1_i[2:0];
-                        if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[7:0]);
-                        else shift_operand = $unsigned(op_s2_i[7:0]);
-                    end
-                endcase
-            end else begin
-                shift_amount = op_s1_i[2:0];
-                shift_operand = op_s2_i[7:0];
-            end
+        // is_shift = operation_valid_i && operation_i inside {OP_VSLL, OP_VSRL, OP_VSRA};
+        // if(is_shift) begin
+        if (Width == 32) begin   
+            unique case (sew_i)
+                vpu_pkg::SEW_32: begin
+                    shift_amount = op_s1_i[4:0];
+                    shift_operand = op_s2_i;
+                end
+                vpu_pkg::SEW_16: begin
+                    shift_amount = op_s1_i[3:0];
+                    if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[15:0]);
+                    else shift_operand                     = $unsigned(op_s2_i[15:0]);
+                end
+                default: begin
+                    shift_amount = op_s1_i[2:0];
+                    if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[7:0]);
+                    else shift_operand = $unsigned(op_s2_i[7:0]);
+                end
+            endcase
+        end else if (Width == 16) begin 
+            unique case (sew_i)
+                vpu_pkg::SEW_16: begin
+                    shift_amount = op_s1_i[3:0];
+                    shift_operand = op_s2_i[15:0];
+                end
+                default: begin
+                    shift_amount = op_s1_i[2:0];
+                    if (operation_i == OP_VSRA) shift_operand = $signed(op_s2_i[7:0]);
+                    else shift_operand = $unsigned(op_s2_i[7:0]);
+                end
+            endcase
+        end else begin
+            shift_amount = op_s1_i[2:0];
+            shift_operand = op_s2_i[7:0];
         end
+        // end
        
     end 
 
@@ -162,14 +162,14 @@ module vpu_vau  import vpu_pkg::*; import rvv_instr_pkg::*; #(
     end: comp_operands
 
     always_comb begin: compare     
-        if(operation_valid_i) 
-            unique case (operation_i)
-                OP_VMSEQ        : comp_result = ~|subtractor_result;	
-                OP_VMSNE        : comp_result = |subtractor_result; 
-                OP_VMSLTU, OP_VMSLT, OP_VMSGTU, OP_VMSGT: comp_result = is_signed_i ? ($signed(comp_op_2) < $signed(comp_op_1)) : (comp_op_2 < comp_op_1); 
-                OP_VMSLEU, OP_VMSLE, OP_VMSGEU, OP_VMSGE: comp_result = {'0, is_signed_i ? ($signed(comp_op_2) <= $signed(comp_op_1)) : (comp_op_2 <= comp_op_1)};
-                default: comp_result = '0;
-            endcase
+        // if(operation_valid_i) 
+        unique case (operation_i)
+            OP_VMSEQ        : comp_result = ~|subtractor_result;	
+            OP_VMSNE        : comp_result = |subtractor_result; 
+            OP_VMSLTU, OP_VMSLT, OP_VMSGTU, OP_VMSGT: comp_result = is_signed_i ? ($signed(comp_op_2) < $signed(comp_op_1)) : (comp_op_2 < comp_op_1); 
+            OP_VMSLEU, OP_VMSLE, OP_VMSGEU, OP_VMSGE: comp_result = {'0, is_signed_i ? ($signed(comp_op_2) <= $signed(comp_op_1)) : (comp_op_2 <= comp_op_1)};
+            default: comp_result = '0;
+        endcase
     end: compare
 
     ////////////

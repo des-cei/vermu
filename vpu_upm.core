@@ -63,6 +63,7 @@ filesets:
         - tb/tb_vpu_top_vwadd_w.sv
         - tb/tb_vpu_top_vwadd.sv
         - tb/tb_vpu_top_vwmacc.sv
+        - tb/tb_vpu_top_vwmul.sv
         - tb/tb_vpu_top_varith.sv
         file_type: systemVerilogSource
         # include_dirs:
